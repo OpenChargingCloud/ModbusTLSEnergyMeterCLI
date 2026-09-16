@@ -247,7 +247,13 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             {
 
                 Console.Error.WriteLine($"The meter refused to be read by '{Role}', although that role may read everything.");
-                Console.Error.WriteLine("Its own log says why - look there for a line beginning with 'RBAC DENY'.");
+                Console.Error.WriteLine();
+                Console.Error.WriteLine("Two different things look like this, and the meter's own log tells them apart:");
+                Console.Error.WriteLine("  * it never let the connection in - the CA that issued this client certificate");
+                Console.Error.WriteLine("    is not one the meter accepts. Its log says 'chain status: PartialChain' or");
+                Console.Error.WriteLine("    'TLS handshake failed', and the Client trust page says which CAs it does accept.");
+                Console.Error.WriteLine("  * it let the connection in and refused the request - look for a line");
+                Console.Error.WriteLine("    beginning with 'RBAC DENY'.");
 
                 return 1;
 
