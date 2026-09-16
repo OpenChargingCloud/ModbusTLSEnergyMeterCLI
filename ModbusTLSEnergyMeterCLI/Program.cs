@@ -141,6 +141,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine("                            [--name <text>] [--hostname <name>] [--ip <address>]");
             Console.WriteLine("                            [--server-pfx <file>] [--pfx-password <text>]");
             Console.WriteLine("                            [--client-ca <file>] [--serial <text>]");
+            Console.WriteLine("                            [--meter-mode <net|import|export>] [--sim-day <minutes>]");
             Console.WriteLine("                            [--idle-timeout <seconds>] [--write-timeout <seconds>]");
             Console.WriteLine("                            [--http-port <number>] [--config <file>] [--data <directory>]");
             Console.WriteLine("                            [--log-days <number>]");
@@ -182,6 +183,20 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine();
             Console.WriteLine("Meter:");
             Console.WriteLine("  --serial <text>      serial number in SunSpec Common Model 1 (default: the --name)");
+            Console.WriteLine("  --meter-mode <mode>  where this meter sits, and therefore which way energy flows");
+            Console.WriteLine("                       through it (default: net). Writable afterwards through");
+            Console.WriteLine($"                       register {SunSpecMeterMap.Addr(SunSpecMeterMap.OffMeterMeterMode)} and on the web page:");
+            Console.WriteLine("                         net     at the grid connection point: the simulated site");
+            Console.WriteLine("                                 draws at night and feeds back around noon, so the");
+            Console.WriteLine("                                 power is signed and both counters move");
+            Console.WriteLine("                         import  in front of a load, which is what a charging");
+            Console.WriteLine("                                 station's meter is: only imported energy");
+            Console.WriteLine("                         export  in front of a generator: only exported energy, and");
+            Console.WriteLine("                                 zero at night, because the sun is down");
+            Console.WriteLine("  --sim-day <minutes>  how much real time one simulated day takes (default: 1440,");
+            Console.WriteLine("                       a real day). Compressing it runs the load and the sun");
+            Console.WriteLine("                       faster so that a whole day can be watched over a coffee;");
+            Console.WriteLine("                       the energy counters still count real seconds.");
             Console.WriteLine();
             Console.WriteLine("Checking:");
             Console.WriteLine("  --verify-log         do not serve: walk the log on disk, check every line against");
@@ -220,6 +235,8 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             String?  pfxPassword    = null;
             String?  clientCAPath   = null;
             String?  serialNumber   = null;
+            var      meterMode      = SunSpecMeterMode.Net;
+            TimeSpan? simulatedDay  = null;
             var      idleTimeout    = TimeSpan.FromSeconds(300);
             var      writeTimeout   = TimeSpan.FromSeconds(30);
             IPPort?  httpPort       = null;
@@ -401,6 +418,28 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         }
                         break;
 
+                    case "--meter-mode":
+                        if (!TryTakeValue(Arguments, ref i, out var modeText) ||
+                            !SunSpecMeterModeExtensions.TryParse(modeText, out meterMode))
+                        {
+                            Console.Error.WriteLine("Missing or unknown mode after --meter-mode! Expected net, import or export.");
+                            return 2;
+                        }
+                        break;
+
+                    case "--sim-day":
+                        if (i + 1 < Arguments.Length && UInt32.TryParse(Arguments[i + 1], out var parsedDay) && parsedDay > 0)
+                        {
+                            simulatedDay = TimeSpan.FromMinutes(parsedDay);
+                            i++;
+                        }
+                        else
+                        {
+                            Console.Error.WriteLine("Missing or invalid number of minutes after --sim-day!");
+                            return 2;
+                        }
+                        break;
+
                     case "--verify-log":
                         verifyLog = true;
                         break;
@@ -568,6 +607,8 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                   ListenPort:         port,
                                   IdleTimeout:        idleTimeout,
                                   WriteTimeout:       writeTimeout,
+                                  MeterMode:          meterMode,
+                                  SimulatedDayLength: simulatedDay,
 
                                   HTTPHostname:       anyAddress
                                                           ? IPvXAddress.Any
@@ -756,6 +797,10 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine();
             Console.WriteLine($"  listening      {Meter.ListenAddress}:{Meter.ListenPort}  (mbaps - TLS only, mutual authentication)");
             Console.WriteLine($"  device         {Meter.Device.DisplayName}");
+            Console.WriteLine($"  simulating     {Meter.Device.Mode.Description()}" +
+                              (Meter.Device.SimulatedDayLength == TimeSpan.FromDays(1)
+                                   ? ""
+                                   : $", a day every {Meter.Device.SimulatedDayLength.TotalMinutes:F0} min"));
             Console.WriteLine($"  registers      {firstRegister} - {lastRegister}  (SunSpec Common Model 1 + Meter Model 213)");
             Console.WriteLine($"  meter cert     {Meter.MeterCertificate.Subject}");
             Console.WriteLine($"  client CA      {Meter.ClientCA.Subject}");

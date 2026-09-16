@@ -305,8 +305,17 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine($"  exported       {Scaled(UInt32At(Registers, SunSpecMeterMap.OffMeterTotWhExp), energySF, "Wh")}");
             Console.WriteLine($"  imported       {Scaled(UInt32At(Registers, SunSpecMeterMap.OffMeterTotWhImp), energySF, "Wh")}");
             Console.WriteLine();
-            Console.WriteLine($"  meter mode     {Registers[SunSpecMeterMap.OffMeterMeterMode]}   " +
-                              $"(register {SunSpecMeterMap.Addr(SunSpecMeterMap.OffMeterMeterMode)}, writable from {SunSpecRoles.GridService} up)");
+
+            var mode = (SunSpecMeterMode) Registers[SunSpecMeterMap.OffMeterMeterMode];
+
+            Console.WriteLine($"  meter mode     {(UInt16) mode} - {mode.Description()}");
+            Console.WriteLine($"                 (register {SunSpecMeterMap.Addr(SunSpecMeterMap.OffMeterMeterMode)}, writable from {SunSpecRoles.GridService} up)");
+
+            // A power of zero is the right answer for a meter in front of a
+            // generator in the dark, and looks exactly like a broken one.
+            if (mode == SunSpecMeterMode.ExportOnly && (Int16) Registers[SunSpecMeterMap.OffMeterW] == 0)
+                Console.WriteLine("                 reading zero because the sun is down, which is what this meter is for");
+
             Console.WriteLine();
 
         }
