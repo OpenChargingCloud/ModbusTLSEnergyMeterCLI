@@ -143,7 +143,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine("                            [--client-ca <file>] [--serial <text>]");
             Console.WriteLine("                            [--meter-mode <net|import|export>] [--sim-day <minutes>]");
             Console.WriteLine("                            [--idle-timeout <seconds>] [--write-timeout <seconds>]");
-            Console.WriteLine("                            [--http-port <number>] [--config <file>] [--data <directory>]");
+            Console.WriteLine("                            [--http-port <number>] [--https] [--config <file>] [--data <directory>]");
             Console.WriteLine("                            [--log-days <number>]");
             Console.WriteLine("                            [--selftest [<role>]] [--verify-log]");
             Console.WriteLine("                            [--verbose | --quiet]");
@@ -158,6 +158,13 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine("Web interface:");
             Console.WriteLine($"  --http-port <number> where people sign in to administer this meter (default: {ModbusTLSEnergyMeter.DefaultHTTPPort})");
             Console.WriteLine("                       --any applies to this listener as well");
+            Console.WriteLine("  --https              serve the web interface over TLS. Its certificate is its own,");
+            Console.WriteLine("                       kept apart from the Modbus/TLS one: what a charging station");
+            Console.WriteLine("                       checks and what a browser checks come from different places");
+            Console.WriteLine("                       and are never the same file. At the first start the meter");
+            Console.WriteLine("                       signs one for itself, so that the page can be reached at all;");
+            Console.WriteLine("                       a browser will say it does not know who signed it, and it is");
+            Console.WriteLine("                       right. Ask for a proper one on the Web certificate page.");
             Console.WriteLine($"  --config <file>      where the name servers and the time server live (default:");
             Console.WriteLine($"                       {MeterConfigFile.DefaultFileName} below the repository root)");
             Console.WriteLine("  --data <directory>   where the accounts and the log live (default: data/ below the");
@@ -240,6 +247,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             var      idleTimeout    = TimeSpan.FromSeconds(300);
             var      writeTimeout   = TimeSpan.FromSeconds(30);
             IPPort?  httpPort       = null;
+            var      https          = false;
             String?  configFilePath = null;
             String?  dataPath       = null;
             Int32?   logKeepDays    = null;
@@ -440,6 +448,10 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         }
                         break;
 
+                    case "--https":
+                        https = true;
+                        break;
+
                     case "--verify-log":
                         verifyLog = true;
                         break;
@@ -614,6 +626,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                                           ? IPvXAddress.Any
                                                           : (IIPAddress) IPv4Address.Localhost,
                                   HTTPPort:           httpPort,
+                                  HTTPS:              https,
                                   DataPath:           dataPath       ?? Path.Combine(RepositoryRoot(), "data"),
                                   LogKeepDays:        logKeepDays,
                                   ConfigFile:         new MeterConfigFile(
@@ -803,10 +816,18 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                    : $", a day every {Meter.Device.SimulatedDayLength.TotalMinutes:F0} min"));
             Console.WriteLine($"  registers      {firstRegister} - {lastRegister}  (SunSpec Common Model 1 + Meter Model 213)");
             Console.WriteLine($"  meter cert     {Meter.MeterCertificate.Subject}");
-            Console.WriteLine($"  client CA      {Meter.ClientCA.Subject}");
+            Console.WriteLine($"                 valid until {Meter.MeterCertificate.NotAfter:yyyy-MM-dd}" +
+                              (Meter.ModbusCertificates.Next?.Certificate is X509Certificate2 nextModbus
+                                   ? $", then the newer one from {nextModbus.NotBefore:yyyy-MM-dd HH:mm}"
+                                   : "") +
+                              $" ({Meter.ModbusCertificates.Entries.Count()} in the store)");
+            Console.WriteLine($"  accepted CAs   {String.Join(", ", Meter.ClientTrust.Chains.Where(chain => chain.Enabled).Select(chain => chain.Name))}");
             Console.WriteLine($"  certificates   {PKIDirectory}");
             Console.WriteLine();
-            Console.WriteLine($"  web interface  {Meter.WebInterfaceURL}");
+            Console.WriteLine($"  web interface  {Meter.WebInterfaceURL}" +
+                              (Meter.HTTPSEnabled
+                                   ? $"  (TLS, {Meter.WebCertificates.Current?.Certificate?.Subject ?? "no certificate"})"
+                                   : "  (plain HTTP)"));
             Console.WriteLine($"  sign in        POST {Meter.WebInterfaceURL}accounts/auth/login");
             Console.WriteLine($"  JSON API       {Meter.WebInterfaceURL}api/v1/status");
             Console.WriteLine($"  accounts       {Meter.DataPath}");
