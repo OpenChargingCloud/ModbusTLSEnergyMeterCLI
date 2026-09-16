@@ -261,3 +261,11 @@ __pycache__/
 *.pyc
 
 .claude
+
+# The PKI this meter generates for itself at the first start:
+# private keys for a simulator, but private keys all the same.
+/pki/
+
+# The accounts and the configuration this meter writes beside itself.
+/data/
+/configuration.json

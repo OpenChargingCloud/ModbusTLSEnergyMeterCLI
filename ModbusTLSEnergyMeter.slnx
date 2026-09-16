@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/Dependencies/">
+    <Project Path="libs/ModbusTLSEnergyMeter/ModbusTLSEnergyMeter/ModbusTLSEnergyMeter.csproj" Id="a74f5bd5-f3fb-4995-91ea-c43fe1aa4699" />
+    <Project Path="libs/ModbusTLSEnergyMeter/ModbusTLSEnergyMeterTests/ModbusTLSEnergyMeterTests.csproj" Id="721ec349-0c45-434b-a63c-16469c54fa45" />
+  </Folder>
+  <Folder Name="/Dependencies/Vanaheimr/">
+    <Project Path="libs/Hermod/Hermod/Hermod.csproj" />
+    <Project Path="libs/Hermod/HermodTests/HermodTests.csproj" />
+    <Project Path="libs/Norn/Norn/Norn.csproj" />
+    <Project Path="libs/Norn/NornTests/NornTests.csproj" />
+    <Project Path="libs/Styx/Styx/Styx.csproj" />
+    <Project Path="libs/Styx/StyxTests/StyxTests.csproj" />
+  </Folder>
+  <Project Path="ModbusTLSEnergyMeterCLI/ModbusTLSEnergyMeterCLI.csproj" />
+</Solution>

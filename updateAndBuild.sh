@@ -2,4 +2,4 @@
 
 git submodule foreach git pull
 git pull
-dotnet build NornCLI.sln
+dotnet build ModbusTLSEnergyMeter.slnx

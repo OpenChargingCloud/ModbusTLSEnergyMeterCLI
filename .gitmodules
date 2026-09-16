@@ -7,3 +7,6 @@
 [submodule "libs/Norn"]
 	path = libs/Norn
 	url = https://github.com/Vanaheimr/Norn.git
+[submodule "libs/ModbusTLSEnergyMeter"]
+	path = libs/ModbusTLSEnergyMeter
+	url = https://github.com/OpenChargingCloud/ModbusTLSEnergyMeter.git
