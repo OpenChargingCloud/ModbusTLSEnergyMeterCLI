@@ -10,3 +10,6 @@
 [submodule "libs/ModbusTLSEnergyMeter"]
 	path = libs/ModbusTLSEnergyMeter
 	url = https://github.com/OpenChargingCloud/ModbusTLSEnergyMeter.git
+[submodule "libs/ChargyCore.NET"]
+	path = libs/ChargyCore.NET
+	url = https://github.com/OpenChargingCloud/ChargyCore.NET.git

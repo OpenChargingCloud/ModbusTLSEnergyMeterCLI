@@ -7,7 +7,12 @@
     <Nullable>enable</Nullable>
     <RootNamespace>cloud.charging.open.EnergyMeters.ModbusTLS.CLI</RootNamespace>
     <AssemblyName>ModbusTLSEnergyMeterCLI</AssemblyName>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Not invariant. ChargyCore names a time zone by its IANA identifier in a
+         static field ("Europe/Berlin"), and in invariant globalization that
+         lookup throws while the type is being initialised - which takes the
+         whole library down, not only the path that wanted a time zone. The
+         meter formats its own numbers and timestamps with the invariant culture
+         explicitly, so what this gives up is nothing it was relying on. -->
   </PropertyGroup>
 
   <ItemGroup>

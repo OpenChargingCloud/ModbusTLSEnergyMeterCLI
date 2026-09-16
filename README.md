@@ -215,6 +215,13 @@ That account is an `IsAdmin` of the organization `EnergyMeter`, and the web
 interface is at `http://127.0.0.1:2351/` unless `--http-port` or `--any` said
 otherwise.
 
+It is not meant to stay the only one. Under Configuration -> Accounts it makes
+more and gives each a role, three of which change nothing at all - so that
+somebody who has to watch this meter does not have to be handed the account that
+can also clear its energy counters. The last administrator cannot be demoted or
+removed: a meter with none left is one nothing can be done to from a browser
+again.
+
 
 ## Repository
 
