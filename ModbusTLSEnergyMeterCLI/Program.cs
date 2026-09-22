@@ -833,8 +833,77 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine($"  accounts       {Meter.DataPath}");
             Console.WriteLine($"  event log      {(Meter.Log.Store is not null ? $"{Meter.Log.Store.Path}, {Meter.Log.Store.KeepDays} days, signed by {Meter.Log.Store.Signer.KeyId}" : "in memory only")}");
             Console.WriteLine($"  configuration  {Meter.ConfigFile.Path}");
+
+            #region What this binary was built from
+
+            // Read out of the assemblies rather than asked of git here: git
+            // would describe the working tree as it is now, while these
+            // describe the trees each part was compiled from, and after a
+            // checkout without a rebuild those are not the same answer.
+            //
+            // Worth the six lines because this meter signs things. A reading
+            // or a charging session is only as trustworthy as the code that
+            // signed it, and that code comes from six repositories that move
+            // independently.
+            var builtFrom = BuiltFrom.Repositories.ToArray();
+
+            if (builtFrom.Length > 0)
+            {
+
+                // One line each, and the whole hash. This is meant to be read
+                // out of a bug report and pasted into a checkout, and an
+                // abbreviation is a thing somebody then has to guess the rest
+                // of. The column is as wide as the longest name rather than a
+                // number picked today, so a repository joining later still
+                // lines up.
+                // Two repositories here are cloned into directories of the
+                // same name - the command line tool's and the library's - so
+                // the name alone does not say which line is which. Where that
+                // happens the assembly is named as well; where it does not,
+                // nothing is added.
+                String Label(LoadedAssembly repository)
+                    => builtFrom.Count(other => other.Repository == repository.Repository) > 1
+                           ? $"{repository.Repository} ({repository.Name})"
+                           : repository.Repository!;
+
+                var width = builtFrom.Max(repository => Label(repository).Length);
+
+                for (var i = 0; i < builtFrom.Length; i++)
+                    Console.WriteLine((i == 0 ? "  built from     " : "                 ") +
+                                      Label(builtFrom[i]).PadRight(width) +
+                                      "  " +
+                                      builtFrom[i].Commit);
+
+            }
+
+            #endregion
+
             Console.WriteLine($"  name servers   {(Meter.DNSEnabled ? String.Join(", ", Meter.DNSClient.DNSServers) : "switched off")}");
-            Console.WriteLine($"  time server    {Meter.NTSClient.Hostname}{(Meter.NTSEnabled ? $", checked every {Meter.TimeCheckEvery.TotalMinutes:F0} min" : " (switched off)")}");
+            #region The time servers
+
+            var bands = Meter.TimeSources.Bands();
+            var asked = bands.SelectMany(band => band).ToArray();
+
+            if (asked.Length <= 1)
+                Console.WriteLine($"  time server    {Meter.NTSClient.Hostname}{(Meter.NTSEnabled ? $", checked every {Meter.TimeCheckEvery.TotalMinutes:F0} min" : " (switched off)")}");
+
+            else
+            {
+
+                // One line per band, because a band is the unit that is
+                // asked at once - putting two bands on one line would read
+                // as six equal servers when it is two and then four.
+                for (var i = 0; i < bands.Count; i++)
+                    Console.WriteLine((i == 0 ? "  time servers   " : "                 ") +
+                                      String.Join(", ", bands[i].Select(source => source.Hostname.ToString())) +
+                                      (bands.Count > 1 ? $"   (priority {bands[i][0].Priority})" : ""));
+
+                Console.WriteLine($"                 at least {Meter.TimeSources.MinServers} of them must answer" +
+                                  (Meter.NTSEnabled ? $", checked every {Meter.TimeCheckEvery.TotalMinutes:F0} min" : " - and NTS is switched off"));
+
+            }
+
+            #endregion
 
             if (OwnPKI)
             {
