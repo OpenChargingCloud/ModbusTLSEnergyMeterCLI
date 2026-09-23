@@ -895,7 +895,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                 // as six equal servers when it is two and then four.
                 for (var i = 0; i < bands.Count; i++)
                     Console.WriteLine((i == 0 ? "  time servers   " : "                 ") +
-                                      String.Join(", ", bands[i].Select(source => source.Hostname.ToString())) +
+                                      String.Join(", ", bands[i].Select(source => source.Hostname.Trimmed)) +
                                       (bands.Count > 1 ? $"   (priority {bands[i][0].Priority})" : ""));
 
                 Console.WriteLine($"                 at least {Meter.TimeSources.MinServers} of them must answer" +
