@@ -15,9 +15,10 @@ It is meant to stand in for the meters that
 need for their own use cases.
 
 This repository is the **command line**: reading arguments, building a PKI when
-there is none, printing what somebody who just started it needs to know, and
-stopping on Ctrl+C or SIGTERM. The meter itself - the registers, the simulation,
-the web interface, the log and the two APIs - is a library of its own in
+there is none, printing what somebody who just started it needs to know, a
+prompt for whoever is at its console, and stopping on `quit`, Ctrl+C or SIGTERM.
+The meter itself - the registers, the simulation, the web interface, the log and
+the two APIs - is a library of its own in
 [`libs/ModbusTLSEnergyMeter`](libs/ModbusTLSEnergyMeter/README.md), so that a
 test, a service or another program can host one without starting a process.
 **What the meter is and does is described there.**
@@ -87,6 +88,45 @@ round, and one at the grid connection point reads whichever way the site is
 going at that moment.
 
 `--help` lists every option.
+
+
+## Typing at it
+
+Once it is up, the console is a prompt rather than a place that only scrolls:
+
+```
+EnergyMeter01> syncNTS
+succeeded after 601 ms: 4 of 4 server(s) answered (2 required), offset +1008.6 ms, spread 4.1 ms
+  ptbtime1.ptb.de  +1009.2 ms, round trip 37.0 ms, key exchange new
+  ptbtime2.ptb.de  +1010.2 ms, round trip 37.0 ms, key exchange new
+  ptbtime3.ptb.de  +1007.9 ms, round trip 37.0 ms, key exchange new
+  ptbtime4.ptb.de  +1006.1 ms, round trip 44.4 ms, key exchange new
+```
+
+The prompt is the meter's serial number, because a meter usually runs on a
+bench beside a charging station, a vehicle and often a second meter, and each
+console should say which of them it is. `help` lists what can be typed, `quit`
+leaves, **Tab** completes and the **up arrow** walks back through what was typed
+before.
+
+`syncNTS` is the first command, and it is **Check the clock now** on the **NTS**
+page, typed: the same group of time servers is asked, the same entries go into
+the log, and the same result is left behind for the page to show as the last
+synchronisation. The one entry that differs says who asked - the page names the
+account that pressed the button, the prompt says it was somebody at the command
+line. Neither of them steps the clock. Unlike the vehicle's and the charging
+station's, it takes no time server after it: theirs take one and test it step by
+step, as the **Test** button in its row of their NTS page does, and this meter
+has neither the button nor the test.
+
+The log keeps writing while you type, from whichever thread did the thing it is
+reporting, and your half-typed line survives it: the line is taken off the
+screen, the entry is written whole, and the line comes back with the cursor
+where it was.
+
+Where there is no terminal - from a script, under a service manager, in CI, or
+with the output going into a file or through `| tee` - there is no prompt, and
+the meter runs until it is stopped, exactly as it did before.
 
 
 ## What the command line decides
@@ -227,11 +267,11 @@ again.
 
 | | |
 |---|---|
-| `ModbusTLSEnergyMeterCLI/` | the arguments, the PKI bootstrap, the banner, `--selftest`, `--verify-log` |
+| `ModbusTLSEnergyMeterCLI/` | the arguments, the PKI bootstrap, the banner, `--selftest`, `--verify-log`, and the prompt with its commands in `CLI/` |
 | `libs/ModbusTLSEnergyMeter/` | [the meter itself](libs/ModbusTLSEnergyMeter/README.md) |
 | `libs/Hermod/` | HTTP, DNS, and the SunSpec Modbus/TLS frontend and device |
 | `libs/Norn/` | the NTS client |
-| `libs/Styx/` | collections and pipes |
+| `libs/Styx/` | collections, pipes, and the command line the prompt is built on |
 
 
 ### Acknowledgements
