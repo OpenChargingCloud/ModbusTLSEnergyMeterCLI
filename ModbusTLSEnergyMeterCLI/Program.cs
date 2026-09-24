@@ -884,8 +884,12 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             var bands = Meter.TimeSources.Bands();
             var asked = bands.SelectMany(band => band).ToArray();
 
+            // The one server the clock is checked against - and not the single
+            // client beside the group, which was named here: a file listing one
+            // server of its own was announced as the default one, root dot and
+            // all, while the log line above it named the right one.
             if (asked.Length <= 1)
-                Console.WriteLine($"  time server    {Meter.NTSClient.Hostname}{(Meter.NTSEnabled ? $", checked every {Meter.TimeCheckEvery.TotalMinutes:F0} min" : " (switched off)")}");
+                Console.WriteLine($"  time server    {(asked.Length == 1 ? asked[0].Hostname.Trimmed : "none switched on")}{(Meter.NTSEnabled ? $", checked every {Meter.TimeCheckEvery.TotalMinutes:F0} min" : " (switched off)")}");
 
             else
             {
