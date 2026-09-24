@@ -30,25 +30,27 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine
 {
 
     /// <summary>
-    /// Ask this meter's time servers what the time is.
+    /// Ask this meter's time servers what the time is, or one of them
+    /// everything.
     /// </summary>
     /// <remarks>
-    /// The same thing the NTS page does with 'Check the clock now'. Both end in
-    /// <see cref="ModbusTLSEnergyMeter.SyncTimeAsync"/>, which asks the same
-    /// group of servers, writes every step into the log and keeps the result
-    /// as the last synchronisation the page shows - so the log book reads the
-    /// same whichever of the two was used, apart from the one line that says
-    /// who asked. A command that did any of that itself would be the beginning
-    /// of two meters disagreeing about what they did.
+    /// Without a server, the same thing the NTS page does with 'Check the clock
+    /// now'. Both end in <see cref="ModbusTLSEnergyMeter.SyncTimeAsync"/>,
+    /// which asks the same group of servers, writes every step into the log and
+    /// keeps the result as the last synchronisation the page shows - so the log
+    /// book reads the same whichever of the two was used, apart from the one
+    /// line that says who asked. A command that did any of that itself would be
+    /// the beginning of two meters disagreeing about what they did.
     ///
-    /// Like the button, it does not step the clock: it says whether the time
-    /// servers can be reached and what they think of the local clock.
+    /// With one, the same thing as that server's Test button on the page:
+    /// <see cref="ModbusTLSEnergyMeter.TestTimeServerAsync"/>, on the ports the
+    /// server is configured with, step by step. Only a server of this meter is
+    /// tested. Anything else is answered with the servers there are, and
+    /// nothing is asked - a name that was mistyped would otherwise be a key
+    /// exchange with whoever answers to it.
     ///
-    /// It takes no time server after it. The vehicle's and the charging
-    /// station's do, and then test that one server step by step, as the Test
-    /// button in its row of their NTS page does; this meter has neither that
-    /// button nor the test behind it, and a command is a second way of asking
-    /// for what the web interface does - never an implementation of its own.
+    /// Neither steps the clock: they say whether the time servers can be
+    /// reached and what they think of the local clock.
     /// </remarks>
     /// <param name="CLI">The command line of the meter to ask.</param>
     public class SyncNTSCommand(MeterCLI CLI) : ACLICommand<MeterCLI>(CLI),
@@ -69,17 +71,74 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine
         #region Suggest(Arguments)
 
         /// <summary>
-        /// Complete the command. It takes nothing after it: which servers are
-        /// asked is the meter's configuration, as it is for the button.
+        /// Complete the command, and then its one argument from the time
+        /// servers this meter has.
         /// </summary>
+        /// <remarks>
+        /// The servers are offered as soon as the command is whole, and not
+        /// only once something of a server has been typed. The command line
+        /// is split on whitespace and keeps no empty word at its end, so
+        /// "syncNTS " arrives here as "syncNTS" alone - and a Tab there that
+        /// answered with the command it already was would never show the list
+        /// it is there to show.
+        /// </remarks>
         public override IEnumerable<SuggestionResponse> Suggest(String[] Arguments)
         {
 
-            if (Arguments.Length == 1 &&
-                CommandName.StartsWith(Arguments[0], StringComparison.CurrentCultureIgnoreCase))
+            #region The command itself - and, once it is whole, the servers
+
+            if (Arguments.Length == 1)
             {
-                return [ SuggestionResponse.CommandCompleted(CommandName) ];
+
+                if (CommandName.Equals(Arguments[0], StringComparison.CurrentCultureIgnoreCase))
+                {
+
+                    var all = TimeServers().
+                                  Select(server => SuggestionResponse.ParameterPrefix($"{CommandName} {server}")).
+                                  ToArray();
+
+                    return all.Length > 0
+                               ? all
+                               : [ SuggestionResponse.CommandCompleted(CommandName) ];
+
+                }
+
+                if (CommandName.StartsWith(Arguments[0], StringComparison.CurrentCultureIgnoreCase))
+                    return [ SuggestionResponse.CommandCompleted(CommandName) ];
+
+                return [];
+
             }
+
+            #endregion
+
+            #region ... and the server to test
+
+            if (Arguments.Length == 2 &&
+                CommandName.Equals(Arguments[0], StringComparison.CurrentCultureIgnoreCase))
+            {
+
+                var list = new List<SuggestionResponse>();
+
+                foreach (var server in TimeServers())
+                {
+
+                    if (!server.StartsWith(Arguments[1], StringComparison.CurrentCultureIgnoreCase))
+                        continue;
+
+                    list.Add(
+                        server.Equals(Arguments[1], StringComparison.CurrentCultureIgnoreCase)
+                            ? SuggestionResponse.ParameterCompleted($"{CommandName} {server}")
+                            : SuggestionResponse.ParameterPrefix   ($"{CommandName} {server}")
+                    );
+
+                }
+
+                return list;
+
+            }
+
+            #endregion
 
             return [];
 
@@ -93,8 +152,41 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine
                                                      CancellationToken  CancellationToken)
         {
 
-            if (Arguments.Length > 1)
+            if (Arguments.Length > 2)
                 return [ $"Usage: {Help()}" ];
+
+            #region One server, in detail
+
+            if (Arguments.Length == 2)
+            {
+
+                var wanted  = Arguments[1].Trim().TrimEnd('.');
+                var server  = cli.Meter.TimeSources.Sources.FirstOrDefault(source => String.Equals(source.Hostname.Trimmed,
+                                                                                                   wanted,
+                                                                                                   StringComparison.OrdinalIgnoreCase));
+
+                // Said and nothing more. Not written to the log either: nothing
+                // was asked of anybody, which is what the log is a book of.
+                if (server is null)
+                    return [ $"'{Arguments[1]}' is none of this meter's time servers, which are {String.Join(", ", TimeServers())}." ];
+
+                // The name as the page sends it for the Test button of that
+                // row - as it is read, without the root's dot - so that the
+                // line the log gets is the page's line, with the command line
+                // where the page names the account and "cli" where it says
+                // "web".
+                var host = server.Hostname.Trimmed;
+
+                cli.Meter.Log.Notice(
+                    $"Somebody at the command line asked this meter to test the time server '{host}'.",
+                    "nts", "test", "cli"
+                );
+
+                return Tested(await cli.Meter.TestTimeServerAsync(host, CancellationToken));
+
+            }
+
+            #endregion
 
             // The line the web interface writes when 'Check the clock now' is
             // pressed, in the same words, at the same level and with the tags
@@ -121,7 +213,26 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine
 
         public override String Help()
 
-            => $"{CommandName} - ask the time servers what the time is, as 'Check the clock now' on the NTS page does; the clock is not stepped";
+            => $"{CommandName} [<time server>] - ask the time servers what the time is, as 'Check the clock now' on the NTS page does, " +
+                "or test one of them in detail, as its Test button does; the clock is not stepped";
+
+        #endregion
+
+
+        #region (private) TimeServers()
+
+        /// <summary>
+        /// The time servers of this meter, switched on or not, as somebody types
+        /// them: without the root's dot.
+        /// </summary>
+        /// <remarks>
+        /// Switched-off ones as well, because the page tests those too: finding
+        /// out whether a server answers is what somebody does before switching
+        /// it on.
+        /// </remarks>
+        private IEnumerable<String> TimeServers()
+
+            => cli.Meter.TimeSources.Sources.Select(source => source.Hostname.Trimmed);
 
         #endregion
 
@@ -176,6 +287,50 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine
 
                 foreach (var server in servers.OfType<JObject>())
                     lines.Add($"  {Hostname(server).PadRight(width)}  {ServerSaid(server)}");
+
+            }
+
+            return [.. lines];
+
+        }
+
+        #endregion
+
+        #region (private static) Tested(Result)
+
+        /// <summary>
+        /// What the Test button's dialog shows, as lines for the console: whether
+        /// the server answered, and then every step with when it happened.
+        /// </summary>
+        /// <remarks>
+        /// All of the steps and not a summary, because they are the answer: a
+        /// test is asked for when something did not work, and which step it
+        /// got to is the whole of what somebody needs. The log has only the
+        /// beginning and the end of it, as it has for the button.
+        ///
+        /// Warnings and errors say so, where the page says it in colour.
+        /// </remarks>
+        private static String[] Tested(JObject Result)
+        {
+
+            var host   = (Result.Value<String>("host") ?? "").TrimEnd('.');
+            var steps  = (Result["steps"] as JArray ?? []).OfType<JObject>().ToArray();
+            var at     = steps.Select(step => $"+{step.Value<Int64>("at_ms")} ms").ToArray();
+            var width  = at.Length > 0 ? at.Max(when => when.Length) : 0;
+
+            var lines  = new List<String> {
+                             $"{host} {(Result.Value<Boolean>("ok") ? "answered" : "did not answer")}, " +
+                             $"{Result.Value<Int64>("runtime_ms")} ms altogether:"
+                         };
+
+            for (var i = 0; i < steps.Length; i++)
+            {
+
+                var level = steps[i].Value<String>("level");
+
+                lines.Add($"  {at[i].PadLeft(width)}  " +
+                          (level is "warning" or "error" ? $"{level}: " : "") +
+                          steps[i].Value<String>("text"));
 
             }
 

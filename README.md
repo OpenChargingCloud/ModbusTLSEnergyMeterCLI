@@ -114,10 +114,48 @@ page, typed: the same group of time servers is asked, the same entries go into
 the log, and the same result is left behind for the page to show as the last
 synchronisation. The one entry that differs says who asked - the page names the
 account that pressed the button, the prompt says it was somebody at the command
-line. Neither of them steps the clock. Unlike the vehicle's and the charging
-station's, it takes no time server after it: theirs take one and test it step by
-step, as the **Test** button in its row of their NTS page does, and this meter
-has neither the button nor the test.
+line. Neither of them steps the clock.
+
+With one of the meter's time servers after it, it is that server's **Test**
+button instead: one server, on the ports it is configured with, and every step
+of the key exchange and the time request with when it happened. Only a server of
+this meter is tested; anything else is answered with the ones there are, and
+nothing is asked. **Tab** offers the meter's own as soon as the command is
+typed, completing as far as their names agree.
+
+The key exchange is TLS, and the test says what its certificate claims and
+whether that held up: the session, then every certificate of the chain as this
+machine built it - the server's, the intermediates', the root's - each with both
+ends of its validity and the days it has left, the root's SHA-256 fingerprint,
+and the verdict with its reasons. The root is there as much as the server's
+certificate because a root can be pinned, and a pinned root that runs out stops
+everything relying on it; which root the chain ends at depends on the machine's
+trust store. A certificate that is refused is described just the same, before
+the exchange is said to have failed.
+
+```
+EnergyMeter01> syncNTS ptbtime2.ptb.de
+ptbtime2.ptb.de answered, 1461 ms altogether:
+     +1 ms  Asking ptbtime2.ptb.de: key exchange on port 4460, time on port 123, 10 second(s) allowed.
+   +597 ms  'ptbtime2.ptb.de' resolves to 192.53.103.104, 2001:0638:0610:be01:0000:0000:0000:0104.
+   +597 ms  Key exchange over TLS ...
+  +1339 ms  Connected to 192.53.103.104, of 2 address(es) that were offered.
+  +1339 ms  Where the time went: name 78 ms, TCP 62 ms, TLS 527 ms, key exchange 36 ms.
+  +1352 ms  TLS 1.3, TLS_AES_128_GCM_SHA256, ALPN ntske/1.
+  +1354 ms  Server certificate: CN=ptbtime2.ptb.de, for ptbtime2.ptb.de; RSA 3072-bit, sha256RSA; valid 2026-08-09 03:05:52 to 2026-11-07 03:05:51 UTC, 43 day(s) left.
+  +1355 ms  Intermediate CA: CN=YR1, O=Let's Encrypt, C=US; RSA 2048-bit, sha256RSA; valid 2025-09-03 00:00:00 to 2028-09-02 23:59:59 UTC, 709 day(s) left.
+  +1355 ms  Intermediate CA: CN=Root YR, O=ISRG, C=US; RSA 4096-bit, sha256RSA; valid 2026-05-13 00:00:00 to 2032-09-02 23:59:59 UTC, 2170 day(s) left.
+  +1355 ms  Root CA: CN=ISRG Root X1, O=Internet Security Research Group, C=US; RSA 4096-bit, sha256RSA; valid 2015-06-04 11:04:38 to 2035-06-04 11:04:38 UTC, 3174 day(s) left.
+  +1355 ms  The root's SHA-256 fingerprint: 96bcec06264976f37460779acf28c5a7cfe8a3c0aae11a8ffcee05c0bddf08c6.
+  +1355 ms  Validated: the chain ends at a root this machine trusts, nothing in it is revoked (asked online), and 'ptbtime2.ptb.de' is one of the server certificate's names.
+  +1367 ms  The key exchange succeeded: AES_SIV_CMAC_256, 8 cookie(s).
+  +1367 ms  It named no NTP server of its own, so the time is asked of this host.
+  +1367 ms  Authenticated NTP request ...
+  +1459 ms  Answered by 192.53.103.104:123; 8 cookie(s) left, and a fresh one came back.
+  +1459 ms  Round trip 26.9 ms.
+  +1460 ms  This meter's clock is +1050.0 ms off what ptbtime2.ptb.de says.
+  +1460 ms  The clock was not stepped: that is a different thing, with every signed reading hanging off it, and not something a test does by surprise.
+```
 
 The log keeps writing while you type, from whichever thread did the thing it is
 reporting, and your half-typed line survives it: the line is taken off the
