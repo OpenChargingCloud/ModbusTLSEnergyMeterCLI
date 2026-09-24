@@ -1,5 +1,8 @@
 # Modbus/TLS Energy Meter
 
+[![CI](https://github.com/OpenChargingCloud/ModbusTLSEnergyMeterCLI/actions/workflows/ci.yml/badge.svg)](https://github.com/OpenChargingCloud/ModbusTLSEnergyMeterCLI/actions/workflows/ci.yml)
+[![Nightly](https://github.com/OpenChargingCloud/ModbusTLSEnergyMeterCLI/actions/workflows/nightly.yml/badge.svg)](https://github.com/OpenChargingCloud/ModbusTLSEnergyMeterCLI/actions/workflows/nightly.yml)
+
 A simulated three-phase energy meter that speaks **Modbus/TLS** (*mbaps*, the
 registered port 802) and nothing else: there is no plaintext listener, every
 peer must present a client certificate, and what that peer may do is decided by
@@ -235,6 +238,10 @@ still holds:
 ```
 
 That one passes when the meter **refuses**.
+
+[CI](.github/workflows/ci.yml) asks both on every push, of a meter it has just
+started on Debian with the PKI that first start built: the first has to read the
+registers, the second has to be refused.
 
 ```bash
 ./run.sh --verify-log

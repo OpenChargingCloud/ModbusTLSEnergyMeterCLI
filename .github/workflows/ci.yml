@@ -1,0 +1,306 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  # Manual runs from the Actions tab ("Run workflow"), same as nightly.yml.
+  workflow_dispatch:
+
+concurrency:
+  # Pull requests: one run per branch, newest wins. Pushes: one run per commit,
+  # and nothing cancels anything — a commit with no verdict is a hole nobody
+  # comes back to fill. Keying the group on the SHA rather than only turning
+  # cancel-in-progress off is what makes that hold for more than two pushes.
+  # The same arrangement as EVCLI, ChargingStationCLI and the libraries of this
+  # stack.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # One leg per platform this meter is used on:
+  #
+  #  * Windows, because that is where it is developed and driven by hand.
+  #  * Debian 13, because a meter like this is started on a Linux box, beside
+  #    the charging station or the local controller that reads it. GitHub has
+  #    no Debian runner image, so this leg is an Ubuntu runner carrying a
+  #    debian:13 container.
+  #
+  # They are not the same meter underneath: Modbus/TLS goes through SChannel on
+  # one and OpenSSL on the other, and the meter's own tests read it over TLS
+  # with the client certificates of its roles on both.
+  #
+  # fail-fast is off on purpose: "red on exactly one platform" is the most
+  # valuable thing a two-leg matrix produces, so one leg must not cancel the
+  # other.
+  #
+  # Unlike EVCLI and ChargingStationCLI there is no job in front of this one:
+  # nothing in this solution speaks ISO 15118, so there are no schemas to
+  # fetch, and every input of the build is in the checkout.
+  # ---------------------------------------------------------------------------
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            leg: windows-latest
+          - os: ubuntu-latest
+            container: debian:13
+            leg: debian-13-container
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    steps:
+
+      # Before the checkout, not after it. The deepest file below this clone
+      # root sits 154 characters down, in ChargyCore's test data, and under the
+      # classic 260-character limit a submodule checkout gives up halfway
+      # through with "Filename too long".
+      - name: Allow long paths (Windows)
+        if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+
+      # Also before the checkout, and for a sharper reason: git itself. The bare
+      # debian:13 image has none, and actions/checkout without git falls back to
+      # downloading a tarball over the REST API — which cannot bring submodules,
+      # so the failure would arrive much later, as a missing Hermod.
+      #
+      # The rest is what .NET and Node need on a bare Debian: curl for the smoke
+      # test below, ICU and tzdata for globalization, OpenSSL for crypto - and
+      # for Modbus/TLS itself - ca-certificates for NuGet over HTTPS, and
+      # xz-utils because the Node tarball is a .tar.xz.
+      #
+      # safe.directory, because the container runs as root and the workspace
+      # belongs to the runner's user: every git call after the checkout would
+      # be refused, the build stamp's among them, which would then read
+      # "unknown" without a word (EVCLI 657566f).
+      - name: Install prerequisites (Debian container)
+        if: runner.os == 'Linux'
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git libicu76 libssl3t64 libstdc++6 tzdata xz-utils && git config --global --add safe.directory '*'
+
+      # The libraries are submodules here, pinned, and testing them as pinned is
+      # the point: this repository's own question is whether this particular
+      # combination of libraries works together. nightly.yml asks the other.
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # The web interface is built by npm and webpack from inside the .NET build
+      # — ModbusTLSEnergyMeter.csproj runs "npm ci" and "npm run build" and then
+      # embeds dist/ as assembly resources — so Node is not optional on either
+      # leg. 24.x: package.json asks for 22 or newer, and the frontend's tests
+      # are run by node itself directly on .ts files, which needs a Node new
+      # enough to strip types without being asked.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      # The whole solution rather than only ModbusTLSEnergyMeterCLI: eleven
+      # projects, ten of them in five submodules, and "they still compile
+      # together at these gitlinks" is the one statement this repository is
+      # uniquely able to make.
+      - name: Build
+        run: dotnet build ModbusTLSEnergyMeter.slnx --configuration Release
+
+      # What the .NET build does not cover. webpack type-checks the modules it
+      # can reach from the entry point, which leaves out the test files; and the
+      # frontend's own tests are run by node, so nothing in a dotnet build would
+      # ever execute them. node_modules is there already - the build put it
+      # there. One leg, because TypeScript does not know which platform it is
+      # on.
+      - name: The web interface (type checks and its own tests)
+        if: matrix.leg == 'debian-13-container'
+        working-directory: libs/ModbusTLSEnergyMeter/ModbusTLSEnergyMeter/Frontend
+        run: |
+          npm run typecheck
+          npm run typecheck:test
+          npm test
+
+      # The meter's own tests: what ends up in the event log when somebody
+      # talks Modbus/TLS to it, the signed log and its keys, what it stands at
+      # across a restart, the JSON API and its event stream, the certificate
+      # store, and the "dns" and "nts" sections of its configuration file.
+      # Nowhere else runs them — libs/ModbusTLSEnergyMeter has no workflow of
+      # its own, by design: it is not built alone, it is built here.
+      #
+      # No category filter. Nothing here waits for the network: the tests that
+      # ask a time server name one under .example, expect it to fail, and give
+      # it a second.
+      - name: Test the meter
+        timeout-minutes: 30
+        run: dotnet test libs/ModbusTLSEnergyMeter/ModbusTLSEnergyMeterTests/ModbusTLSEnergyMeterTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
+
+      # The question no unit test in this repository asks: does it start, and
+      # does it answer the way its clients will ask? Everything that only
+      # happens at a first start happens here — a whole PKI built out of
+      # nothing, an administrator made, a configuration file written — and the
+      # web interface turns out to be inside the assembly rather than merely to
+      # have been built.
+      #
+      # Everything it writes goes to a temporary directory: none of the PKI,
+      # the accounts, the log or the configuration file belongs in a workspace
+      # whose cleanliness the build stamps into every assembly it produces.
+      # Ports above 1024, because 802 is privileged on Linux: 18802 and 18351
+      # are its defaults, 802 and 2351, moved up.
+      #
+      # Five questions are asked of it. "/" must come back as the embedded web
+      # interface. "/api/v1/status" must come back 401, because what a meter
+      # reads is nobody's business until somebody has signed in — a 200 there
+      # would mean the door had come off. "/api/v1/configuration/time", the
+      # meter's clock, must come back 401 as well, and for one more reason: an
+      # unknown path under /api answers 404, so a 401 is also what proves the
+      # route is there at all.
+      #
+      # And the two that are this meter's own, over Modbus/TLS, which is what
+      # it is for: a second process started with --selftest walks the whole
+      # path a real client walks — TLS, the client certificate, the role in it,
+      # the authorization policy and the register map. With the certificate the
+      # first start issued for ReadOnlySunSpec it must read the registers. With
+      # the one that carries no role it must be refused, which is when that
+      # selftest exits 0: a read there would be the same door come off as a 200
+      # from the JSON API, on the side of the meter that a charging station
+      # talks to.
+      - name: The meter starts and answers (Debian)
+        if: matrix.leg == 'debian-13-container'
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -u
+          tmp="$(mktemp -d)"
+          dotnet ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI.dll \
+              --port       18802 \
+              --http-port  18351 \
+              --pki        "$tmp/pki" \
+              --data       "$tmp/data" \
+              --config     "$tmp/configuration.json" \
+              > "$tmp/console.log" 2>&1 &
+          pid=$!
+
+          # curl -w writes "000" itself when it could not connect, so nothing
+          # may be appended on failure ("000000" is not "000"), and "|| true"
+          # keeps curl's exit 7 from ending this -e shell before it has waited.
+          # Both learned the hard way in EVCLI, runs 35763572789 and
+          # 35764217384. The ${:-000} is for the case where there is no curl.
+          root=000
+          for _ in $(seq 1 60); do
+              root="$(curl -sS -o "$tmp/index.html" -w '%{http_code}' http://127.0.0.1:18351/ 2>/dev/null || true)"
+              root="${root:-000}"
+              if [ "$root" != 000 ]; then
+                  break
+              fi
+              # Gone rather than slow: stop waiting for it.
+              kill -0 "$pid" 2>/dev/null || break
+              sleep 1
+          done
+
+          status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18351/api/v1/status 2>/dev/null || true)"
+          status="${status:-000}"
+
+          clock="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18351/api/v1/configuration/time 2>/dev/null || true)"
+          clock="${clock:-000}"
+
+          # Modbus/TLS, from a second process as a client. Each exit status is
+          # taken inside an if, so that a failing selftest cannot end this -e
+          # shell before it has said what it found.
+          if dotnet ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI.dll \
+                 --selftest --port 18802 --pki "$tmp/pki" \
+                 > "$tmp/selftest.log" 2>&1; then
+              selftest=0
+          else
+              selftest=$?
+          fi
+
+          # Exit 0 here means the meter said no, as it must.
+          if dotnet ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI.dll \
+                 --selftest NO-ROLE --port 18802 --pki "$tmp/pki" \
+                 > "$tmp/selftest-no-role.log" 2>&1; then
+              refused=0
+          else
+              refused=$?
+          fi
+
+          # Asked before it is stopped, so that the answer below means something.
+          running=0
+          kill -0 "$pid" 2>/dev/null && running=1
+
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+
+          echo "GET /                           -> $root"
+          echo "GET /api/v1/status              -> $status"
+          echo "GET /api/v1/configuration/time  -> $clock"
+          echo "Modbus/TLS as ReadOnlySunSpec   -> selftest exit $selftest"
+          echo "Modbus/TLS as NO-ROLE           -> selftest exit $refused, 0 meaning refused"
+
+          # What the banner says this was built from - in every run, not only a
+          # red one, because a stamp that reads "unknown" or "-dirty" is worth
+          # seeing while everything else is green.
+          awk '/^  built from/ { f = 1 } f && !/^  built from/ && !/^                 / { f = 0 } f' "$tmp/console.log" || true
+
+          fault=0
+          if [ "$root" != 200 ]; then
+              echo "The web interface did not answer."
+              fault=1
+          elif ! grep -q "<title>Energy Meter</title>" "$tmp/index.html"; then
+              echo "Something answered, but it is not the embedded web interface."
+              fault=1
+          fi
+          if [ "$status" != 401 ]; then
+              echo "The JSON API answered $status where 401 was expected: it is supposed to be shut to anyone not signed in."
+              fault=1
+          fi
+          if [ "$clock" != 401 ]; then
+              echo "The clock answered $clock where 401 was expected: a 404 means the route has gone missing, a 200 that it is open to anyone."
+              fault=1
+          fi
+          if [ "$selftest" != 0 ]; then
+              echo "Read over Modbus/TLS with the ReadOnlySunSpec certificate, it did not answer as it should. What the selftest said:"
+              cat "$tmp/selftest.log" || true
+              fault=1
+          fi
+          if [ "$refused" != 0 ]; then
+              echo "Asked over Modbus/TLS with the certificate that carries no role, it did not refuse as it must. What the selftest said:"
+              cat "$tmp/selftest-no-role.log" || true
+              fault=1
+          fi
+
+          if [ "$fault" != 0 ]; then
+              echo
+              if [ "$running" = 1 ]; then
+                  echo "It was still running when it was asked."
+              else
+                  echo "It was no longer running when it was asked."
+              fi
+              echo "What it said, without the first-start password:"
+              grep -v -i password "$tmp/console.log" || echo "(nothing at all)"
+              exit 1
+          fi
+
+      # The same question in the form the other leg can answer without process
+      # control: the entry assembly loads, its arguments parse, it exits 0.
+      # Modbus/TLS is not left out on this leg: the meter's own tests above
+      # read it through SChannel with the certificates of its roles.
+      - name: The meter runs (Windows)
+        if: runner.os == 'Windows'
+        run: dotnet ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI.dll --help
+
+      # The console log answers "did it pass" and almost nothing else. TRX keeps,
+      # per test: outcome, duration, error message, stack trace, and the reason
+      # an Assert.Ignore gave — which never reaches the console at all.
+      #
+      # !cancelled() rather than success(): a red run is when these files matter
+      # most, so uploading only on green would throw the evidence away in
+      # exactly the case it is wanted.
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.leg }}
+          path: artifacts/*.trx
