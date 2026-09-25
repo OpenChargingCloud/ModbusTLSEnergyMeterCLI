@@ -25,10 +25,12 @@ using System.Security.Cryptography.X509Certificates;
 using org.GraphDefined.Vanaheimr.Hermod.SunSpecModbusTLS.Common;
 using org.GraphDefined.Vanaheimr.Hermod.SunSpecModbusTLS.PKI;
 
+using cloud.charging.open.protocols.WWCP.Node;
+using cloud.charging.open.protocols.WWCP.Node.Logging;
+using cloud.charging.open.protocols.WWCP.Node.Configuration;
+
 using cloud.charging.open.EnergyMeters.ModbusTLS;
 using cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine;
-using cloud.charging.open.EnergyMeters.ModbusTLS.Configuration;
-using cloud.charging.open.EnergyMeters.ModbusTLS.Logging;
 
 using IIPAddress  = org.GraphDefined.Vanaheimr.Hermod.IIPAddress;
 using IPv4Address = org.GraphDefined.Vanaheimr.Hermod.IPv4Address;
@@ -167,13 +169,16 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine("                       signs one for itself, so that the page can be reached at all;");
             Console.WriteLine("                       a browser will say it does not know who signed it, and it is");
             Console.WriteLine("                       right. Ask for a proper one on the Web certificate page.");
-            Console.WriteLine($"  --config <file>      where the name servers and the time server live (default:");
-            Console.WriteLine($"                       {MeterConfigFile.DefaultFileName} below the repository root)");
+            Console.WriteLine($"  --config <file>      where the name servers and the time servers live (default:");
+            Console.WriteLine($"                       {WWCPConfigFile.DefaultFileName} below the repository root)");
             Console.WriteLine("  --data <directory>   where the accounts and the log live (default: data/ below the");
-            Console.WriteLine("                       repository root). At the first start an administrator is made");
-            Console.WriteLine("                       there and its password is shown once.");
-            Console.WriteLine("  --log-days <number>  how many days of the event log are kept on disk (default: 30,");
-            Console.WriteLine("                       0 keeps it in memory only)");
+            Console.WriteLine($"                       repository root). At the first start an administrator, '{ModbusTLSEnergyMeter.DefaultAdminUser}',");
+            Console.WriteLine("                       is made there and its password is shown once.");
+            Console.WriteLine($"  --log-days <number>  how many days of the log files are kept (default: {ModbusTLSEnergyMeter.DefaultLogKeepDays}).");
+            Console.WriteLine("                       The log book beside them - the entries that are evidence: the");
+            Console.WriteLine("                       clock, the certificates, every write and every refusal - is");
+            Console.WriteLine("                       signed, chained and kept whole. 0 writes neither, and keeps");
+            Console.WriteLine("                       the log in memory only.");
             Console.WriteLine();
             Console.WriteLine("Certificates:");
             Console.WriteLine("  --pki <directory>    where the certificates live (default: pki/ below the repository");
@@ -208,8 +213,8 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine("                       the energy counters still count real seconds.");
             Console.WriteLine();
             Console.WriteLine("Checking:");
-            Console.WriteLine("  --verify-log         do not serve: walk the log on disk, check every line against");
-            Console.WriteLine("                       the chain and the signature, and say what it found");
+            Console.WriteLine("  --verify-log         do not serve: walk the log book on disk, check every line");
+            Console.WriteLine("                       against the chain and the signature, and say what it found");
             Console.WriteLine("  --selftest [<role>]  do not serve: connect to a meter that is already running, read");
             Console.WriteLine($"                       its registers and print them. Role defaults to {SunSpecRoles.ReadOnly}.");
             Console.WriteLine();
@@ -636,8 +641,8 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                   HTTPS:              https,
                                   DataPath:           dataPath       ?? Path.Combine(RepositoryRoot(), "data"),
                                   LogKeepDays:        logKeepDays,
-                                  ConfigFile:         new MeterConfigFile(
-                                                          configFilePath ?? Path.Combine(RepositoryRoot(), MeterConfigFile.DefaultFileName)
+                                  ConfigFile:         new WWCPConfigFile(
+                                                          configFilePath ?? Path.Combine(RepositoryRoot(), WWCPConfigFile.DefaultFileName)
                                                       ),
 
                                   ConsoleLogLevel:    verbose ? LogLevel.Debug
@@ -662,11 +667,22 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
                 try
                 {
-                    await energyMeter.StartAsync();
+                    await energyMeter.Start();
+                }
+                catch (PortUnavailableException problem)
+                {
+                    return ReportListenFailure(problem, verbose);
                 }
                 catch (Exception e)
                 {
-                    return ReportListenFailure(e, address, port);
+
+                    Console.Error.WriteLine($"The meter could not start: {e.Message}");
+
+                    if (verbose)
+                        Console.Error.WriteLine(e);
+
+                    return 1;
+
                 }
 
                 PrintBanner(energyMeter, pkiDir, pfxPassword, ownPKI);
@@ -818,7 +834,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
                 try
                 {
-                    await energyMeter.StopAsync();
+                    await energyMeter.Stop();
                 }
                 catch (Exception e)
                 {
@@ -838,8 +854,8 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
         #region (private static) VerifyLog(DataPath)
 
         /// <summary>
-        /// Walk the log on disk and say whether it still leads to where it says
-        /// it does, without starting a meter.
+        /// Walk the log book on disk and say whether it still leads to where it
+        /// says it does, without starting a meter.
         /// </summary>
         /// <remarks>
         /// Without starting one on purpose: the question is asked of a meter
@@ -850,19 +866,21 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
         private static Int32 VerifyLog(String DataPath)
         {
 
-            var path = Path.Combine(Path.GetFullPath(DataPath), LogStore.DefaultDirectoryName);
+            var path = Path.Combine(Path.GetFullPath(DataPath), ModbusTLSEnergyMeter.LogDirectoryName);
 
             if (!Directory.Exists(path))
             {
-                Console.Error.WriteLine($"There is no log in '{path}'.");
+                Console.Error.WriteLine($"There is no log book in '{path}'.");
                 return 2;
             }
 
-            using var store   = new LogStore(path);
+            // The files the meter writes its log book to, and none of the log
+            // files beside them: those are for reading, and are not signed.
+            using var store   = new SignedLog(path, ModbusTLSEnergyMeter.MeterKind.LogFilePrefix);
             var       result  = store.Verify();
 
             Console.WriteLine();
-            Console.WriteLine($"  log            {path}");
+            Console.WriteLine($"  log book       {path}");
             Console.WriteLine($"  signing key    {result.KeyId}");
             Console.WriteLine($"  entries        {result.Entries}");
             Console.WriteLine($"  head           {result.Head}");
@@ -884,34 +902,51 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                 return 0;
             }
 
-            Console.Error.WriteLine($"  The log is broken: {result.FirstProblem}");
+            Console.Error.WriteLine($"  The log book is broken: {result.FirstProblem}");
             return 1;
 
         }
 
         #endregion
 
-        #region (private static) ReportListenFailure(Reason, Address, Port)
+        #region (private static) ReportListenFailure(Problem, Verbose)
 
-        private static Int32 ReportListenFailure(Exception?  Reason,
-                                                 IPAddress   Address,
-                                                 Int32       Port)
+        /// <summary>
+        /// Say which of the meter's two ports could not be had, and what to do
+        /// about it.
+        /// </summary>
+        /// <remarks>
+        /// Which one matters, because a different switch moves each: --port the
+        /// Modbus/TLS frontend, --http-port the web interface. "Port in use" on
+        /// its own sends somebody to move the wrong one half of the time.
+        /// </remarks>
+        private static Int32 ReportListenFailure(PortUnavailableException  Problem,
+                                                 Boolean                   Verbose)
         {
 
-            Console.Error.WriteLine($"Cannot listen on {Address}:{Port}: {Reason?.Message}");
+            var port    = Problem.Port.ToUInt16();
+            var option  = Problem.Whose == ModbusTLSEnergyMeter.ModbusTLSPort
+                              ? "--port"
+                              : "--http-port";
 
-            if (Reason is SocketException { SocketErrorCode: SocketError.AccessDenied } &&
-                Port < 1024 &&
+            Console.Error.WriteLine($"The meter could not start: {Problem.Message}.");
+
+            if (Problem.Because == SocketError.AccessDenied &&
+                port < 1024 &&
                 !OperatingSystem.IsWindows())
             {
                 Console.Error.WriteLine();
-                Console.Error.WriteLine($"Port {Port} is privileged. Either start this as root, or once:");
+                Console.Error.WriteLine($"Port {port} is privileged. Either start this as root, or once:");
                 Console.Error.WriteLine($"  sudo setcap cap_net_bind_service=+ep {Environment.ProcessPath}");
-                Console.Error.WriteLine("or pick a port above 1024 with --port.");
+                Console.Error.WriteLine($"or pick a port above 1024 with {option}.");
             }
 
-            if (Reason is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse })
-                Console.Error.WriteLine("Something else is listening there already - another meter, perhaps.");
+            else if (Problem.Because == SocketError.AddressAlreadyInUse)
+                Console.Error.WriteLine("Another meter already running is the usual answer. " +
+                                        $"Stop it, or give this one another port with {option} <number>.");
+
+            if (Verbose)
+                Console.Error.WriteLine(Problem);
 
             return 1;
 
@@ -951,13 +986,15 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine($"  certificates   {PKIDirectory}");
             Console.WriteLine();
             Console.WriteLine($"  web interface  {Meter.WebInterfaceURL}" +
-                              (Meter.HTTPSEnabled
+                              (Meter.HTTPS
                                    ? $"  (TLS, {Meter.WebCertificates.Current?.Certificate?.Subject ?? "no certificate"})"
                                    : "  (plain HTTP)"));
-            Console.WriteLine($"  sign in        POST {Meter.WebInterfaceURL}accounts/auth/login");
-            Console.WriteLine($"  JSON API       {Meter.WebInterfaceURL}api/v1/status");
-            Console.WriteLine($"  accounts       {Meter.DataPath}");
-            Console.WriteLine($"  event log      {(Meter.Log.Store is not null ? $"{Meter.Log.Store.Path}, {Meter.Log.Store.KeepDays} days, signed by {Meter.Log.Store.Signer.KeyId}" : "in memory only")}");
+            Console.WriteLine($"  sign in        POST {Meter.WebInterfaceURL}{ModbusTLSEnergyMeter.ExtAPIPath.ToString().Trim('/')}/auth/login");
+            Console.WriteLine($"  JSON API       {Meter.APIURL}v1/status");
+            Console.WriteLine($"  event stream   {Meter.APIURL}v1/events");
+            Console.WriteLine($"  accounts       {Meter.ExtAPI.Users.Count()} in {Meter.AccountsPath}");
+            Console.WriteLine($"  log files      {(Meter.LogPath is not null ? $"{Meter.LogPath}, kept {Meter.LogKeepDays} days" : "none - the log is in memory only (--log-days 0)")}");
+            Console.WriteLine($"  log book       {(Meter.MetrologicalLog is not null ? $"{Meter.MetrologicalLog.Path}, kept whole, signed by {Meter.MetrologicalLog.Signer.KeyId}" : "none")}");
             Console.WriteLine($"  configuration  {Meter.ConfigFile.Path}");
 
             #region What this binary was built from

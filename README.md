@@ -204,7 +204,7 @@ on the Web certificate page, and it takes over the moment it is valid.
 ### Where it keeps things
 
 `--data` for the accounts, the log and the certificate stores, `--config` for
-the name servers and the time server, `--pki` for the certificates this meter is
+the name servers and the time servers, `--pki` for the certificates this meter is
 bootstrapped with. All three default to a directory beside the repository root,
 and all three are ignored by git: the generated PKI holds private keys for a
 simulator, but private keys all the same.
@@ -214,8 +214,10 @@ start, and the CA it was started with into the list of accepted client CAs - so
 that from then on there is one place that decides what is shown and who is let
 in, and a meter started the old way needs nothing done to it.
 
-`--log-days` is how many days of the log stay on disk; `0` keeps it in memory
-only.
+`--log-days` is how many days of the log files stay on disk, thirty unless it
+says otherwise. The log book beside them - the entries that are evidence,
+signed and chained - is kept whole. `0` writes neither, and keeps the log in
+memory only.
 
 
 ## Checking it
@@ -247,9 +249,9 @@ registers, the second has to be refused.
 ./run.sh --verify-log
 ```
 
-does not serve anything: it walks the log on disk and checks every line against
-its own hash, the line before it and the signature, then says what it found and
-prints the head of the chain. What that is worth, and what it is not, is
+does not serve anything: it walks the log book on disk and checks every line
+against its own hash, the line before it and the signature, then says what it
+found and prints the head of the chain. What that is worth, and what it is not, is
 [in the library's README](libs/ModbusTLSEnergyMeter/README.md#and-it-is-signed).
 
 
@@ -290,15 +292,17 @@ printed once:
 
 ```
   +- First start: there were no accounts, so an administrator was made -------
-  |  user      admin
+  |  user      root
   |  password  FNCiigxUCU5wLo_3Q1Ma3dSqz9ooO1fz
   |  It is shown here once and kept only as a hash. Write it down.
   +---------------------------------------------------------------------------
 ```
 
-That account is an `IsAdmin` of the organization `EnergyMeter`, and the web
-interface is at `http://127.0.0.1:2351/` unless `--http-port` or `--any` said
-otherwise.
+That account is in the group `systemadmin`, and the web interface is at
+`http://127.0.0.1:2351/` unless `--http-port` or `--any` said otherwise. A data
+directory from before the meter was a node keeps its accounts, and each keeps
+the role it had - see
+[From before the groups](libs/ModbusTLSEnergyMeter/README.md#from-before-the-groups).
 
 It is not meant to stay the only one. Under Configuration -> Accounts it makes
 more and gives each a role, three of which change nothing at all - so that
@@ -314,8 +318,10 @@ again.
 |---|---|
 | `ModbusTLSEnergyMeterCLI/` | the arguments, the PKI bootstrap, the banner, `--selftest`, `--verify-log`, and the prompt with its commands in `CLI/` |
 | `libs/ModbusTLSEnergyMeter/` | [the meter itself](libs/ModbusTLSEnergyMeter/README.md) |
+| `libs/WWCP_Node/` | what every OpenChargingCloud program with a web interface is: the accounts, the log and the log book, name resolution, the clock and its time servers |
 | `libs/Hermod/` | HTTP, DNS, and the SunSpec Modbus/TLS frontend and device |
 | `libs/Norn/` | the NTS client |
+| `libs/Urdr/` | RFC 3161 time stamps, which WWCP_Node builds on |
 | `libs/Styx/` | collections, pipes, and the command line the prompt is built on |
 
 
