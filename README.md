@@ -194,25 +194,28 @@ only; the energy counters still count real seconds.
 `--port` for Modbus/TLS, `--http-port` for the web interface, `--any` to listen
 on every address rather than on the loopback - which applies to both.
 
-`--https` serves the web interface over TLS. Its certificate is **its own**, in
-a store of its own: what a charging station checks and what a browser checks
-come from different places and are never the same file. At the first start the
-meter signs one for itself so that the page can be reached at all - a browser
-will say it does not know who signed it, and it is right. Ask for a proper one
-on the Web certificate page, and it takes over the moment it is valid.
+`--https` serves the web interface over TLS. Its certificate is **its own**,
+told in the certificate store that it is for the web interface: what a charging
+station checks and what a browser checks come from different places and are
+never the same file. At the first start the meter signs one for itself so that
+the page can be reached at all - a browser will say it does not know who signed
+it, and it is right. Ask for a proper one on the Certificates page, and it takes
+over the moment it is valid.
 
 ### Where it keeps things
 
-`--data` for the accounts, the log and the certificate stores, `--config` for
+`--data` for the accounts, the log and the certificate store, `--config` for
 the name servers and the time servers, `--pki` for the certificates this meter is
 bootstrapped with. All three default to a directory beside the repository root,
 and all three are ignored by git: the generated PKI holds private keys for a
 simulator, but private keys all the same.
 
-The certificate this meter was started with is taken into the store at the first
-start, and the CA it was started with into the list of accepted client CAs - so
-that from then on there is one place that decides what is shown and who is let
-in, and a meter started the old way needs nothing done to it.
+The certificate this meter was started with is put into the certificate store at
+the first start, as what the Modbus/TLS listener shows, and the CA it was started
+with as a CA its clients may be issued by - so that from then on there is one
+place that decides what is shown and who is let in, and a meter started the old
+way needs nothing done to it. At every start after, both are found there and
+left as they are: what somebody did with them since stands.
 
 `--log-days` is how many days of the log files stay on disk, thirty unless it
 says otherwise. The log book beside them - the entries that are evidence,

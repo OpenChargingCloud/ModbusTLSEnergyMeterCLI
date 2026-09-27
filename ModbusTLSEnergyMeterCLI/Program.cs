@@ -978,16 +978,16 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine($"  registers      {firstRegister} - {lastRegister}  (SunSpec Common Model 1 + Meter Model 213)");
             Console.WriteLine($"  meter cert     {Meter.MeterCertificate.Subject}");
             Console.WriteLine($"                 valid until {Meter.MeterCertificate.NotAfter:yyyy-MM-dd}" +
-                              (Meter.ModbusCertificates.Next?.Certificate is X509Certificate2 nextModbus
-                                   ? $", then the newer one from {nextModbus.NotBefore:yyyy-MM-dd HH:mm}"
+                              (Meter.ModbusCertificates.Next is { } nextModbus
+                                   ? $", then the newer one from {nextModbus.NotBefore.UtcDateTime:yyyy-MM-dd HH:mm}"
                                    : "") +
-                              $" ({Meter.ModbusCertificates.Entries.Count()} in the store)");
-            Console.WriteLine($"  accepted CAs   {String.Join(", ", Meter.ClientTrust.Chains.Where(chain => chain.Enabled).Select(chain => chain.Name))}");
+                              $" ({Meter.ModbusCertificates.Candidates.Count} valid for Modbus/TLS in the store)");
+            Console.WriteLine($"  accepted CAs   {String.Join(", ", Meter.ClientRoots.Usable.Select(root => root.Label))}");
             Console.WriteLine($"  certificates   {PKIDirectory}");
             Console.WriteLine();
             Console.WriteLine($"  web interface  {Meter.WebInterfaceURL}" +
                               (Meter.HTTPS
-                                   ? $"  (TLS, {Meter.WebCertificates.Current?.Certificate?.Subject ?? "no certificate"})"
+                                   ? $"  (TLS, {Meter.WebCertificates.Current?.Certificate.Subject ?? "no certificate"})"
                                    : "  (plain HTTP)"));
             Console.WriteLine($"  sign in        POST {Meter.WebInterfaceURL}{ModbusTLSEnergyMeter.ExtAPIPath.ToString().Trim('/')}/auth/login");
             Console.WriteLine($"  JSON API       {Meter.APIURL}v1/status");
