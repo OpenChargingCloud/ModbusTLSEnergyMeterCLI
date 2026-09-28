@@ -4,6 +4,7 @@
     <Project Path="libs/ModbusTLSEnergyMeter/ModbusTLSEnergyMeterTests/ModbusTLSEnergyMeterTests.csproj" Id="721ec349-0c45-434b-a63c-16469c54fa45" />
     <Project Path="libs/WWCP_Node/WWCP_Node/WWCP_Node.csproj" />
     <Project Path="libs/WWCP_Node/WWCP_Node_Tests/WWCP_Node_Tests.csproj" />
+    <Project Path="libs/WWCP_Node/WWCP_Node_TestKit/WWCP_Node_TestKit.csproj" />
   </Folder>
   <Folder Name="/Dependencies/Chargy/">
     <Project Path="libs/ChargyCore.NET/ChargyCore/ChargyCore.csproj" />
