@@ -128,7 +128,7 @@ jobs:
           status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18351/api/v1/status 2>/dev/null || true)"
           status="${status:-000}"
 
-          clock="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18351/api/v1/configuration/time 2>/dev/null || true)"
+          clock="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18351/api/v1/clock 2>/dev/null || true)"
           clock="${clock:-000}"
 
           if dotnet ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI.dll \
@@ -155,7 +155,7 @@ jobs:
 
           echo "GET /                           -> $root"
           echo "GET /api/v1/status              -> $status"
-          echo "GET /api/v1/configuration/time  -> $clock"
+          echo "GET /api/v1/clock               -> $clock"
           echo "Modbus/TLS as ReadOnlySunSpec   -> selftest exit $selftest"
           echo "Modbus/TLS as NO-ROLE           -> selftest exit $refused, 0 meaning refused"
 

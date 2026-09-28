@@ -153,10 +153,10 @@ jobs:
       # Five questions are asked of it. "/" must come back as the embedded web
       # interface. "/api/v1/status" must come back 401, because what a meter
       # reads is nobody's business until somebody has signed in — a 200 there
-      # would mean the door had come off. "/api/v1/configuration/time", the
-      # meter's clock, must come back 401 as well, and for one more reason: an
-      # unknown path under /api answers 404, so a 401 is also what proves the
-      # route is there at all.
+      # would mean the door had come off. "/api/v1/clock", the meter's clock
+      # at the path every node has it at, must come back 401 as well, and for
+      # one more reason: an unknown path under /api answers 404 without asking
+      # who is there, so a 401 is also what proves the route is there at all.
       #
       # And the two that are this meter's own, over Modbus/TLS, which is what
       # it is for: a second process started with --selftest walks the whole
@@ -203,7 +203,7 @@ jobs:
           status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18351/api/v1/status 2>/dev/null || true)"
           status="${status:-000}"
 
-          clock="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18351/api/v1/configuration/time 2>/dev/null || true)"
+          clock="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18351/api/v1/clock 2>/dev/null || true)"
           clock="${clock:-000}"
 
           # Modbus/TLS, from a second process as a client. Each exit status is
@@ -235,7 +235,7 @@ jobs:
 
           echo "GET /                           -> $root"
           echo "GET /api/v1/status              -> $status"
-          echo "GET /api/v1/configuration/time  -> $clock"
+          echo "GET /api/v1/clock               -> $clock"
           echo "Modbus/TLS as ReadOnlySunSpec   -> selftest exit $selftest"
           echo "Modbus/TLS as NO-ROLE           -> selftest exit $refused, 0 meaning refused"
 
