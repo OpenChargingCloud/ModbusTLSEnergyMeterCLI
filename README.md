@@ -112,8 +112,8 @@ console should say which of them it is. `help` lists what can be typed, `quit`
 leaves, **Tab** completes and the **up arrow** walks back through what was typed
 before.
 
-`syncNTS` is the first command, and it is **Check the clock now** on the **NTS**
-page, typed: the same group of time servers is asked, the same entries go into
+`syncNTS` is the first command, and it is **Sync now** on the **NTS** page,
+typed: the same group of time servers is asked, the same entries go into
 the log, and the same result is left behind for the page to show as the last
 synchronisation. The one entry that differs says who asked - the page names the
 account that pressed the button, the prompt says it was somebody at the command

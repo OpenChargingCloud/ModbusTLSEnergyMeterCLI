@@ -19,7 +19,6 @@
 
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 
 using org.GraphDefined.Vanaheimr.Hermod.SunSpecModbusTLS.Common;
@@ -689,143 +688,14 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
                 #region The command line, until 'quit', Ctrl+C or SIGTERM
 
-                // Whether anybody can type here at all. Started from a script,
-                // from a service manager or in CI, this process has no terminal
-                // on its input and Console.ReadKey throws rather than waiting -
-                // and there would be nobody to type anyway. Then the meter
-                // simply runs, exactly as it did before there was a command
-                // line, and the web interface is how it is spoken to.
-                //
-                // The output counts too: the prompt is drawn by moving the
-                // cursor, and with the output going into "| tee" or a file there
-                // is no cursor to move. Measured on Windows with the vehicle,
-                // whose prompt then looked at its input only: the prompt threw
-                // while drawing itself, before a key was pressed, and the
-                // program was gone within 200 ms of its banner - with exit code
-                // 0, a program that said all was well.
-                var canBeTypedAt = !Console.IsInputRedirected &&
-                                   !Console.IsOutputRedirected;
-
-                Console.WriteLine(canBeTypedAt
-                                      ? "Type 'help' for what can be typed here, 'quit' or Ctrl+C to stop."
-                                      : "Press Ctrl+C to stop. (No terminal here, so nothing to type at.)");
-                Console.WriteLine();
-
-                var stopped = new TaskCompletionSource();
-
-                // Ctrl+C still means stop, as it always has here. The command
-                // line adds a handler of its own for it, which cancels whatever
-                // command is running; both fire, and that is the intended
-                // reading of Ctrl+C - abandon what is running and shut the
-                // meter down. 'quit' is the same thing said politely.
-                Console.CancelKeyPress += (_, e) => {
-                    e.Cancel = true;
-                    stopped.TrySetResult();
-                };
-
-                // systemd stops a service with SIGTERM, and a meter that is
-                // killed instead of stopped leaves its clients waiting.
-                using var sigterm = PosixSignalRegistration.Create(
-                                        PosixSignal.SIGTERM,
-                                        context => {
-                                            context.Cancel = true;
-                                            stopped.TrySetResult();
-                                        }
-                                    );
-
-                if (canBeTypedAt)
-                {
-
-                    var cli          = new MeterCLI(energyMeter);
-                    var brokeAtOnce  = false;
-
-                    while (true)
-                    {
-
-                        // From here two things write on one screen: this command
-                        // line, and the meter's log from whichever thread did
-                        // the thing it is reporting. So the log stops writing of
-                        // its own accord and asks the command line for the screen
-                        // instead - which takes the half-typed command off it,
-                        // writes the entry whole, and puts the command back with
-                        // the cursor where it was.
-                        energyMeter.ShareConsoleWith(cli.WriteBlock);
-
-                        // On a thread of its own, because Console.ReadKey blocks
-                        // the one it is called on: awaited directly, the command
-                        // line would keep this thread inside ReadKey and Ctrl+C
-                        // would have nobody left to wake.
-                        var since   = System.Diagnostics.Stopwatch.GetTimestamp();
-                        var typing  = Task.Run(cli.Run);
-
-                        // The Modbus/TLS frontend as well, which is what this
-                        // waited for before there was a prompt: a meter whose
-                        // frontend has stopped is not kept up by somebody
-                        // typing.
-                        await Task.WhenAny(stopped.Task, typing, energyMeter.RunTask);
-
-                        if (!typing.IsFaulted)
-                            break;
-
-                        // A command line that broke is not somebody asking for
-                        // the meter to stop. What broke the vehicle's and the
-                        // station's first was a line typed wider than the
-                        // window: until Styx learned to show such a line
-                        // through a window onto it, it threw out of the line
-                        // editor - measured in 80 columns, "Parameter 'left',
-                        // actual value was 80" - and a program that took that
-                        // for 'quit' shut down with exit code 0. That cause is
-                        // gone; this is for the next one.
-                        //
-                        // The console goes back to the log first, with a lock
-                        // of its own, because the command line's way of writing
-                        // may be what broke: a prompt that fails while drawing
-                        // itself stays registered as the line on the screen,
-                        // and every entry after that fails trying to take it
-                        // off again.
-                        //
-                        // Then a new prompt - unless the last one was already
-                        // a new one and broke again the moment it started.
-                        // That is a console a prompt cannot be drawn on at all,
-                        // and asking a third time would only fail a third time.
-                        // How fast the first one broke says nothing: a line
-                        // pasted in straight after the start is still a line.
-                        var padlock = new Lock();
-
-                        energyMeter.ShareConsoleWith(write => { lock (padlock) { write(); } });
-
-                        var atOnce = System.Diagnostics.Stopwatch.GetElapsedTime(since) < TimeSpan.FromSeconds(1);
-                        var giveUp = atOnce && brokeAtOnce;
-
-                        brokeAtOnce = atOnce;
-
-                        // On one line, as every entry is: the message of an
-                        // exception may carry line breaks of its own - the one
-                        // above does, before "Actual value was 80" - and in the
-                        // log file a second line has no time, no level and no
-                        // tags.
-                        var why = typing.Exception?.GetBaseException().Message.ReplaceLineEndings(" ");
-
-                        energyMeter.Log.Warning(
-                            $"The command line stopped working: {why} " +
-                            (giveUp
-                                 ? "A new one broke again as soon as it started, so there is none; the meter keeps running, and Ctrl+C stops it."
-                                 : "A new one is started."),
-                            "cli"
-                        );
-
-                        if (giveUp)
-                        {
-                            await Task.WhenAny(stopped.Task, energyMeter.RunTask);
-                            break;
-                        }
-
-                    }
-
-                }
-
-                else
-                    await Task.WhenAny(stopped.Task, energyMeter.RunTask);
+                // The node's command line: a prompt where somebody can type,
+                // nothing but waiting where nobody can - started from a script,
+                // a service manager or CI - and the log and the prompt sharing
+                // one screen. Its end is 'quit', Ctrl+C or SIGTERM, and the end
+                // of the Modbus/TLS frontend as well, which is what this waited
+                // for before there was a prompt: a meter whose frontend has
+                // stopped is not kept up by somebody typing.
+                await new MeterCLI(energyMeter).RunUntilStopped(energyMeter.RunTask);
 
                 #endregion
 
@@ -1004,40 +874,15 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             // describe the trees each part was compiled from, and after a
             // checkout without a rebuild those are not the same answer.
             //
-            // Worth the six lines because this meter signs things. A reading
-            // or a charging session is only as trustworthy as the code that
-            // signed it, and that code comes from six repositories that move
-            // independently.
-            var builtFrom = BuiltFrom.Repositories.ToArray();
-
-            if (builtFrom.Length > 0)
-            {
-
-                // One line each, and the whole hash. This is meant to be read
-                // out of a bug report and pasted into a checkout, and an
-                // abbreviation is a thing somebody then has to guess the rest
-                // of. The column is as wide as the longest name rather than a
-                // number picked today, so a repository joining later still
-                // lines up.
-                // Two repositories here are cloned into directories of the
-                // same name - the command line tool's and the library's - so
-                // the name alone does not say which line is which. Where that
-                // happens the assembly is named as well; where it does not,
-                // nothing is added.
-                String Label(LoadedAssembly repository)
-                    => builtFrom.Count(other => other.Repository == repository.Repository) > 1
-                           ? $"{repository.Repository} ({repository.Name})"
-                           : repository.Repository!;
-
-                var width = builtFrom.Max(repository => Label(repository).Length);
-
-                for (var i = 0; i < builtFrom.Length; i++)
-                    Console.WriteLine((i == 0 ? "  built from     " : "                 ") +
-                                      Label(builtFrom[i]).PadRight(width) +
-                                      "  " +
-                                      builtFrom[i].Commit);
-
-            }
+            // Worth the lines because this meter signs things. A reading or a
+            // charging session is only as trustworthy as the code that signed
+            // it, and that code comes from repositories that move
+            // independently. The node says it as every kind of node does: a
+            // line for each repository with its whole commit, and the assembly
+            // beside the name where two share one - as the command line tool's
+            // and the library's do here.
+            foreach (var line in Meter.BuiltFrom.BannerLines())
+                Console.WriteLine(line);
 
             #endregion
 

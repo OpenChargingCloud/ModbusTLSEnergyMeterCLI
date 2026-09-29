@@ -19,6 +19,8 @@
 
 using System.Reflection;
 
+using cloud.charging.open.protocols.WWCP.Node.CommandLine;
+
 #endregion
 
 namespace cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine
@@ -28,22 +30,22 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine
     /// The command line of a running energy meter.
     /// </summary>
     /// <remarks>
-    /// Everything a command needs is reachable from here, which is why every
-    /// command takes one of these: the meter itself, and through it its
+    /// The node's command line, with the meter's prompt: the commands every
+    /// node has, syncNTS among them, and the console from the first prompt
+    /// until 'quit', Ctrl+C or SIGTERM. Everything a command needs is
+    /// reachable from here - the meter itself, and through it its
     /// configuration, its log and everything the JSON API can do. A command is
     /// a second way of asking for the same thing as the web interface - never
     /// an implementation of its own.
     ///
     /// Commands are not listed anywhere. The constructor asks Styx to walk this
-    /// assembly for anything that implements ICLICommand and can be built from
-    /// a MeterCLI, so a new command is a new file and nothing else.
-    ///
-    /// Styx's CLI is named in full, where the vehicle's and the station's
-    /// import its namespace: this program's own namespace ends in ".CLI", and
-    /// from anywhere below cloud.charging.open.EnergyMeters.ModbusTLS the name
-    /// on its own finds that namespace before any type of that name.
+    /// assembly as well for anything that implements ICLICommand and can be
+    /// built from a MeterCLI, so a command of the meter's own is a new file and
+    /// nothing else. The one this meter had, syncNTS, is the node's now: a copy
+    /// of it here would be a second command answering to the same word, and
+    /// Styx runs neither of two that match.
     /// </remarks>
-    public class MeterCLI : org.GraphDefined.Vanaheimr.CLI.CLI
+    public class MeterCLI : NodeCLI
     {
 
         #region Properties
@@ -65,7 +67,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine
         public MeterCLI(ModbusTLSEnergyMeter  Meter,
                         params Assembly[]     AssembliesWithCLICommands)
 
-            : base(AssembliesWithCLICommands)
+            : base(Meter, AssembliesWithCLICommands)
 
         {
 
