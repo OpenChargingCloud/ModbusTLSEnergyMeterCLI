@@ -18,7 +18,6 @@
 #region Usings
 
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 
 using org.GraphDefined.Vanaheimr.Hermod.SunSpecModbusTLS.Common;
@@ -26,6 +25,7 @@ using org.GraphDefined.Vanaheimr.Hermod.SunSpecModbusTLS.PKI;
 
 using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
+using cloud.charging.open.protocols.WWCP.Node.CommandLine;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
 
 using cloud.charging.open.EnergyMeters.ModbusTLS;
@@ -76,158 +76,173 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
         #endregion
 
 
-        #region (private static) TryTakeValue  (Arguments, ref Index, out Value)
-
-        private static Boolean TryTakeValue(String[]     Arguments,
-                                            ref Int32    Index,
-                                            out String?  Value)
-        {
-
-            if (Index + 1 < Arguments.Length && !Arguments[Index + 1].StartsWith("--"))
-            {
-                Value = Arguments[++Index];
-                return true;
-            }
-
-            Value = null;
-            return false;
-
-        }
-
-        #endregion
-
-        #region (private static) RepositoryRoot()
-
-        /// <summary>
-        /// The directory holding ModbusTLSEnergyMeter.slnx, looked up from the
-        /// binary and from the current directory; the current directory when
-        /// neither leads to it.
-        /// </summary>
-        /// <remarks>
-        /// The PKI defaults to a place below it, so that the certificates do
-        /// not end up in bin/ - where the next "dotnet clean" would take the
-        /// meter's identity with it.
-        /// </remarks>
-        private static String RepositoryRoot()
-        {
-
-            foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
-            {
-
-                var directory = new DirectoryInfo(start);
-
-                while (directory is not null)
-                {
-
-                    if (File.Exists(Path.Combine(directory.FullName, "ModbusTLSEnergyMeter.slnx")))
-                        return directory.FullName;
-
-                    directory = directory.Parent;
-
-                }
-
-            }
-
-            return Environment.CurrentDirectory;
-
-        }
-
-        #endregion
-
         #region (private static) PrintUsage()
 
+        /// <summary>
+        /// What -h shows, laid out as every kind of node lays out its own:
+        /// wrapped at <see cref="NodeUsage.Width"/>, and what a switch does
+        /// beginning at <see cref="NodeUsage.Column"/> - on the switch's line
+        /// where the switch leaves room for it, on the lines below where not.
+        /// </summary>
+        /// <remarks>
+        /// In the meter's own words rather than in <see cref="NodeUsage"/>'s,
+        /// because the switches are not the node's: --port is the Modbus/TLS
+        /// port here and always was, the web interface's is --http-port, and
+        /// the accounts and the log live below --data.
+        /// </remarks>
         private static void PrintUsage()
         {
 
-            Console.WriteLine("Usage: ModbusTLSEnergyMeter [--port <number>] [--any | --listen <address>]");
-            Console.WriteLine("                            [--pki <directory>] [--regenerate-pki]");
-            Console.WriteLine("                            [--name <text>] [--hostname <name>] [--ip <address>]");
-            Console.WriteLine("                            [--server-pfx <file>] [--pfx-password <text>]");
-            Console.WriteLine("                            [--client-ca <file>] [--serial <text>]");
-            Console.WriteLine("                            [--meter-mode <net|import|export>] [--sim-day <minutes>]");
-            Console.WriteLine("                            [--idle-timeout <seconds>] [--write-timeout <seconds>]");
-            Console.WriteLine("                            [--http-port <number>] [--https] [--config <file>] [--data <directory>]");
-            Console.WriteLine("                            [--log-days <number>]");
-            Console.WriteLine("                            [--selftest [<role>]] [--verify-log]");
-            Console.WriteLine("                            [--verbose | --quiet]");
+            static void Say(IEnumerable<String> Lines)
+            {
+                foreach (var line in Lines)
+                    Console.WriteLine(line);
+            }
+
+            static void Switch(String Name, String Says)
+                => Say(NodeUsage.Switch(Name, Says));
+
+            var below = new String(' ', NodeUsage.Column);
+
+            Say(Synopsis("[--port <number>]", "[--any | --listen <address>]",
+                         "[--pki <directory>]", "[--regenerate-pki]",
+                         "[--name <text>]", "[--hostname <name>]", "[--ip <address>]",
+                         "[--server-pfx <file>]", "[--pfx-password <text>]",
+                         "[--client-ca <file>]", "[--serial <text>]",
+                         "[--meter-mode <net|import|export>]", "[--sim-day <minutes>]",
+                         "[--idle-timeout <seconds>]", "[--write-timeout <seconds>]",
+                         "[--http-port <number>]", "[--https]", "[--config <file>]", "[--data <directory>]",
+                         "[--log-days <number>]",
+                         "[--selftest [<role>]]", "[--verify-log]",
+                         "[--verbose | --quiet]"));
             Console.WriteLine();
+
             Console.WriteLine("Network:");
-            Console.WriteLine($"  --port <number>      TCP port to listen on (default: {DefaultPort}, the registered mbaps port)");
-            Console.WriteLine("  --any                listen on all addresses instead of 127.0.0.1");
-            Console.WriteLine("  --listen <address>   listen on one specific address");
-            Console.WriteLine("  --idle-timeout <s>   drop a connection that asks nothing for this long (default: 300)");
-            Console.WriteLine("  --write-timeout <s>  drop a connection that stops reading our answers (default: 30)");
+            Switch("--port <number>",       $"TCP port to listen on (default: {DefaultPort}, the registered mbaps port)");
+            Switch("--any",                  "listen on all addresses instead of 127.0.0.1");
+            Switch("--listen <address>",     "listen on one specific address");
+            Switch("--idle-timeout <s>",     "drop a connection that asks nothing for this long (default: 300)");
+            Switch("--write-timeout <s>",    "drop a connection that stops reading our answers (default: 30)");
             Console.WriteLine();
+
             Console.WriteLine("Web interface:");
-            Console.WriteLine($"  --http-port <number> where people sign in to administer this meter (default: {ModbusTLSEnergyMeter.DefaultHTTPPort})");
-            Console.WriteLine("                       --any applies to this listener as well");
-            Console.WriteLine("  --https              serve the web interface over TLS. Its certificate is its own,");
-            Console.WriteLine("                       kept apart from the Modbus/TLS one: what a charging station");
-            Console.WriteLine("                       checks and what a browser checks come from different places");
-            Console.WriteLine("                       and are never the same file. At the first start the meter");
-            Console.WriteLine("                       signs one for itself, so that the page can be reached at all;");
-            Console.WriteLine("                       a browser will say it does not know who signed it, and it is");
-            Console.WriteLine("                       right. Ask for a proper one on the Web certificate page.");
-            Console.WriteLine($"  --config <file>      where the name servers and the time servers live (default:");
-            Console.WriteLine($"                       {WWCPConfigFile.DefaultFileName} below the repository root)");
-            Console.WriteLine("  --data <directory>   where the accounts and the log live (default: data/ below the");
-            Console.WriteLine($"                       repository root). At the first start an administrator, '{ModbusTLSEnergyMeter.DefaultAdminUser}',");
-            Console.WriteLine("                       is made there and its password is shown once.");
-            Console.WriteLine($"  --log-days <number>  how many days of the log files are kept (default: {ModbusTLSEnergyMeter.DefaultLogKeepDays}).");
-            Console.WriteLine("                       The log book beside them - the entries that are evidence: the");
-            Console.WriteLine("                       clock, the certificates, every write and every refusal - is");
-            Console.WriteLine("                       signed, chained and kept whole. 0 writes neither, and keeps");
-            Console.WriteLine("                       the log in memory only.");
+            Switch("--http-port <number>",  $"where people sign in to administer this meter (default: {ModbusTLSEnergyMeter.DefaultHTTPPort})");
+            Say(NodeUsage.Wrap("--any applies to this listener as well", below, below));
+            Switch("--https",                "serve the web interface over TLS. Its certificate is its own, kept apart from the Modbus/TLS " +
+                                             "one: what a charging station checks and what a browser checks come from different places and " +
+                                             "are never the same file. At the first start the meter signs one for itself, so that the page " +
+                                             "can be reached at all; a browser will say it does not know who signed it, and it is right. Ask " +
+                                             "for a proper one on the Web certificate page.");
+            Switch("--config <file>",       $"where the name servers and the time servers live (default: {WWCPConfigFile.DefaultFileName} " +
+                                             "below the repository root)");
+            Switch("--data <directory>",     "where the accounts and the log live (default: data/ below the repository root). At the first " +
+                                            $"start an administrator, '{ModbusTLSEnergyMeter.DefaultAdminUser}', is made there and its password " +
+                                             "is shown once.");
+            Switch("--log-days <number>",   $"how many days of the log files are kept (default: {ModbusTLSEnergyMeter.DefaultLogKeepDays}). The " +
+                                             "log book beside them - the entries that are evidence: the clock, the certificates, every write " +
+                                             "and every refusal - is signed, chained and kept whole. 0 writes neither, and keeps the log in " +
+                                             "memory only.");
             Console.WriteLine();
+
             Console.WriteLine("Certificates:");
-            Console.WriteLine("  --pki <directory>    where the certificates live (default: pki/ below the repository");
-            Console.WriteLine("                       root). A whole PKI - root CA, two issuing CAs, a meter");
-            Console.WriteLine("                       certificate and one client certificate per SunSpec role - is");
-            Console.WriteLine("                       built there at the first start.");
-            Console.WriteLine("  --regenerate-pki     build the PKI again, overwriting what is there. Every client");
-            Console.WriteLine("                       certificate handed out so far stops working.");
-            Console.WriteLine($"  --name <text>        common name of the meter certificate (default: {DefaultDeviceName})");
-            Console.WriteLine("  --hostname <name>    another DNS name for the meter certificate, repeatable. Give the");
-            Console.WriteLine("                       name that clients dial when the meter is not on their machine.");
-            Console.WriteLine("  --ip <address>       another IP address for the meter certificate, repeatable");
-            Console.WriteLine("  --server-pfx <file>  use this PKCS#12 file instead of a generated one");
-            Console.WriteLine($"  --pfx-password <t>   its password (default: {DemoPfxPassword})");
-            Console.WriteLine("  --client-ca <file>   the CA that client certificates must chain to");
+            Switch("--pki <directory>",      "where the certificates live (default: pki/ below the repository root). A whole PKI - root CA, " +
+                                             "two issuing CAs, a meter certificate and one client certificate per SunSpec role - is built " +
+                                             "there at the first start.");
+            Switch("--regenerate-pki",       "build the PKI again, overwriting what is there. Every client certificate handed out so far " +
+                                             "stops working.");
+            Switch("--name <text>",         $"common name of the meter certificate (default: {DefaultDeviceName})");
+            Switch("--hostname <name>",      "another DNS name for the meter certificate, repeatable. Give the name that clients dial when " +
+                                             "the meter is not on their machine.");
+            Switch("--ip <address>",         "another IP address for the meter certificate, repeatable");
+            Switch("--server-pfx <file>",    "use this PKCS#12 file instead of a generated one");
+            Switch("--pfx-password <t>",    $"its password (default: {DemoPfxPassword})");
+            Switch("--client-ca <file>",     "the CA that client certificates must chain to");
             Console.WriteLine();
+
             Console.WriteLine("Meter:");
-            Console.WriteLine("  --serial <text>      serial number in SunSpec Common Model 1 (default: the --name)");
-            Console.WriteLine("  --meter-mode <mode>  where this meter sits, and therefore which way energy flows");
-            Console.WriteLine("                       through it (default: net). Writable afterwards through");
-            Console.WriteLine($"                       register {SunSpecMeterMap.Addr(SunSpecMeterMap.OffMeterMeterMode)} and on the web page:");
-            Console.WriteLine("                         net     at the grid connection point: the simulated site");
-            Console.WriteLine("                                 draws at night and feeds back around noon, so the");
-            Console.WriteLine("                                 power is signed and both counters move");
-            Console.WriteLine("                         import  in front of a load, which is what a charging");
-            Console.WriteLine("                                 station's meter is: only imported energy");
-            Console.WriteLine("                         export  in front of a generator: only exported energy, and");
-            Console.WriteLine("                                 zero at night, because the sun is down");
-            Console.WriteLine("  --sim-day <minutes>  how much real time one simulated day takes (default: 1440,");
-            Console.WriteLine("                       a real day). Compressing it runs the load and the sun");
-            Console.WriteLine("                       faster so that a whole day can be watched over a coffee;");
-            Console.WriteLine("                       the energy counters still count real seconds.");
+            Switch("--serial <text>",        "serial number in SunSpec Common Model 1 (default: the --name)");
+            Switch("--meter-mode <mode>",    "where this meter sits, and therefore which way energy flows through it (default: net). " +
+                                            $"Writable afterwards through register {SunSpecMeterMap.Addr(SunSpecMeterMap.OffMeterMeterMode)} " +
+                                             "and on the web page:");
+
+            // Listed as the node lists the kinds of certificate: two columns
+            // further in than what a switch does, and what each one is where
+            // the longest name ends.
+            foreach (var (mode, says) in new[] {
+                         ("net",     "at the grid connection point: the simulated site draws at night and feeds back around noon, so " +
+                                     "the power is signed and both counters move"),
+                         ("import",  "in front of a load, which is what a charging station's meter is: only imported energy"),
+                         ("export",  "in front of a generator: only exported energy, and zero at night, because the sun is down")
+                     })
+            {
+                var name = $"{below}  {mode,-6}  ";
+                Say(NodeUsage.Wrap(says, name, new String(' ', name.Length)));
+            }
+
+            Switch("--sim-day <minutes>",    "how much real time one simulated day takes (default: 1440, a real day). Compressing it runs " +
+                                             "the load and the sun faster so that a whole day can be watched over a coffee; the energy " +
+                                             "counters still count real seconds.");
             Console.WriteLine();
+
             Console.WriteLine("Checking:");
-            Console.WriteLine("  --verify-log         do not serve: walk the log book on disk, check every line");
-            Console.WriteLine("                       against the chain and the signature, and say what it found");
-            Console.WriteLine("  --selftest [<role>]  do not serve: connect to a meter that is already running, read");
-            Console.WriteLine($"                       its registers and print them. Role defaults to {SunSpecRoles.ReadOnly}.");
+            Switch("--verify-log",           "do not serve: walk the log book on disk, check every line against the chain and the " +
+                                             "signature, and say what it found");
+            Switch("--selftest [<role>]",    "do not serve: connect to a meter that is already running, read its registers and print " +
+                                            $"them. Role defaults to {SunSpecRoles.ReadOnly}.");
             Console.WriteLine();
+
             Console.WriteLine("Log:");
-            Console.WriteLine("  -v, --verbose        write every entry, down to the debug ones");
-            Console.WriteLine("  -q, --quiet          write only warnings and worse");
+            Switch("-v, --verbose",          "write every entry, down to the debug ones");
+            Switch("-q, --quiet",            "write only warnings and worse");
             Console.WriteLine();
-            Console.WriteLine($"On Linux port {DefaultPort} is privileged: either start this as root, or allow the");
-            Console.WriteLine("binary to bind low ports once with setcap, or pick a port above 1024 with --port.");
+
+            Say(NodeUsage.Wrap($"On Linux port {DefaultPort} is privileged: either start this as root, or allow the binary to bind " +
+                                "low ports once with setcap, or pick a port above 1024 with --port.", "", ""));
             Console.WriteLine();
-            Console.WriteLine("Once it is up, the console is a prompt: 'help' lists what can be typed there,");
-            Console.WriteLine("Tab completes it, and 'quit' or Ctrl+C stops the meter. Started where there is");
-            Console.WriteLine("no terminal - from a script, under a service manager, in CI, or with the output");
-            Console.WriteLine("going into a file - there is no prompt and it simply runs.");
+
+            Say(NodeUsage.Wrap("Once it is up, the console is a prompt: 'help' lists what can be typed there, Tab completes it, " +
+                               "and 'quit' or Ctrl+C stops the meter. Started where there is no terminal - from a script, under a " +
+                               "service manager, in CI, or with the output going into a file - there is no prompt and it simply " +
+                               "runs.", "", ""));
+
+        }
+
+        #endregion
+
+        #region (private static) Synopsis(params Items)
+
+        /// <summary>
+        /// The switches in one place, laid out as the node lays out its own:
+        /// one bracketed item after the other behind the program's name, and a
+        /// new line, begun below the first item, where the next item would
+        /// reach past <see cref="NodeUsage.Width"/>.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="NodeUsage.Wrap"/> breaks between words, and so would
+        /// break "[--port &lt;number&gt;]" in two.
+        /// </remarks>
+        /// <param name="Items">The switches, one bracketed item each.</param>
+        private static IEnumerable<String> Synopsis(params String[] Items)
+        {
+
+            const String usage = "Usage: ModbusTLSEnergyMeter";
+
+            var line = usage;
+
+            foreach (var item in Items)
+            {
+
+                if (line.Length > usage.Length && line.Length + 1 + item.Length > NodeUsage.Width)
+                {
+                    yield return line;
+                    line = new String(' ', usage.Length);
+                }
+
+                line += " " + item;
+
+            }
+
+            yield return line;
 
         }
 
@@ -291,7 +306,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--listen":
-                        if (!TryTakeValue(Arguments, ref i, out listenAddress))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out listenAddress))
                         {
                             Console.Error.WriteLine("Missing address after --listen!");
                             return 2;
@@ -338,7 +353,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--config":
-                        if (!TryTakeValue(Arguments, ref i, out configFilePath))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out configFilePath))
                         {
                             Console.Error.WriteLine("Missing file after --config!");
                             return 2;
@@ -359,7 +374,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--data":
-                        if (!TryTakeValue(Arguments, ref i, out dataPath))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out dataPath))
                         {
                             Console.Error.WriteLine("Missing directory after --data!");
                             return 2;
@@ -367,7 +382,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--pki":
-                        if (!TryTakeValue(Arguments, ref i, out pkiDirectory))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out pkiDirectory))
                         {
                             Console.Error.WriteLine("Missing directory after --pki!");
                             return 2;
@@ -379,7 +394,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--name":
-                        if (!TryTakeValue(Arguments, ref i, out deviceName))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out deviceName))
                         {
                             Console.Error.WriteLine("Missing text after --name!");
                             return 2;
@@ -387,16 +402,16 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--hostname":
-                        if (!TryTakeValue(Arguments, ref i, out var dnsName))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out var dnsName))
                         {
                             Console.Error.WriteLine("Missing name after --hostname!");
                             return 2;
                         }
-                        extraDNSNames.Add(dnsName!);
+                        extraDNSNames.Add(dnsName);
                         break;
 
                     case "--ip":
-                        if (!TryTakeValue(Arguments, ref i, out var ipText) ||
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out var ipText) ||
                             !IPAddress.TryParse(ipText, out var extraIP))
                         {
                             Console.Error.WriteLine("Missing or invalid address after --ip!");
@@ -406,7 +421,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--server-pfx":
-                        if (!TryTakeValue(Arguments, ref i, out serverPfxPath))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out serverPfxPath))
                         {
                             Console.Error.WriteLine("Missing file after --server-pfx!");
                             return 2;
@@ -414,7 +429,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--pfx-password":
-                        if (!TryTakeValue(Arguments, ref i, out pfxPassword))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out pfxPassword))
                         {
                             Console.Error.WriteLine("Missing text after --pfx-password!");
                             return 2;
@@ -422,7 +437,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--client-ca":
-                        if (!TryTakeValue(Arguments, ref i, out clientCAPath))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out clientCAPath))
                         {
                             Console.Error.WriteLine("Missing file after --client-ca!");
                             return 2;
@@ -430,7 +445,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--serial":
-                        if (!TryTakeValue(Arguments, ref i, out serialNumber))
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out serialNumber))
                         {
                             Console.Error.WriteLine("Missing text after --serial!");
                             return 2;
@@ -438,7 +453,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         break;
 
                     case "--meter-mode":
-                        if (!TryTakeValue(Arguments, ref i, out var modeText) ||
+                        if (!NodeArguments.TryTakeValue(Arguments, ref i, out var modeText) ||
                             !SunSpecMeterModeExtensions.TryParse(modeText, out meterMode))
                         {
                             Console.Error.WriteLine("Missing or unknown mode after --meter-mode! Expected net, import or export.");
@@ -469,8 +484,8 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
                     case "--selftest":
                         selfTest = true;
-                        if (TryTakeValue(Arguments, ref i, out var role))
-                            selfTestRole = role!;
+                        if (NodeArguments.TryTakeValue(Arguments, ref i, out var role))
+                            selfTestRole = role;
                         break;
 
                     case "-v":
@@ -535,9 +550,15 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
             #endregion
 
+            // Where the PKI, the data and the configuration go unless told
+            // otherwise: below the directory holding ModbusTLSEnergyMeter.slnx,
+            // so that the certificates do not end up in bin/ - where the next
+            // "dotnet clean" would take the meter's identity with it.
+            var root = NodeProgram.RepositoryRoot("ModbusTLSEnergyMeter.slnx");
+
             #region The PKI, built at the first start
 
-            var pkiDir     = Path.GetFullPath(pkiDirectory ?? Path.Combine(RepositoryRoot(), "pki"));
+            var pkiDir     = Path.GetFullPath(pkiDirectory ?? Path.Combine(root, "pki"));
             var serverPfx  = serverPfxPath ?? Path.Combine(pkiDir, ServerPfxFileName);
             var clientsCA  = clientCAPath  ?? Path.Combine(pkiDir, ClientsCACertFileName);
 
@@ -597,7 +618,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             #region --verify-log: check the log instead of serving
 
             if (verifyLog)
-                return VerifyLog(dataPath ?? Path.Combine(RepositoryRoot(), "data"));
+                return VerifyLog(dataPath ?? Path.Combine(root, "data"));
 
             #endregion
 
@@ -638,10 +659,10 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                                           : (IIPAddress) IPv4Address.Localhost,
                                   HTTPPort:           httpPort,
                                   HTTPS:              https,
-                                  DataPath:           dataPath       ?? Path.Combine(RepositoryRoot(), "data"),
+                                  DataPath:           dataPath       ?? Path.Combine(root, "data"),
                                   LogKeepDays:        logKeepDays,
                                   ConfigFile:         new WWCPConfigFile(
-                                                          configFilePath ?? Path.Combine(RepositoryRoot(), WWCPConfigFile.DefaultFileName)
+                                                          configFilePath ?? Path.Combine(root, WWCPConfigFile.DefaultFileName)
                                                       ),
 
                                   ConsoleLogLevel:    verbose ? LogLevel.Debug
@@ -651,31 +672,26 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             }
             catch (Exception e)
             {
-
-                Console.Error.WriteLine($"The meter could not be set up: {e.Message}");
-
-                if (verbose)
-                    Console.Error.WriteLine(e);
-
-                return 1;
-
+                return NodeProgram.CouldNotBeSetUp(ModbusTLSEnergyMeter.MeterKind, e, verbose);
             }
 
             await using (energyMeter)
             {
 
+                // A port the meter could not have is the node's to explain,
+                // with WhatToDoAbout for the switch that moves it. Started lets
+                // anything else through, and whatever else would stop the start
+                // is said here, as it was before the node said the rest, rather
+                // than end the process with a stack trace.
                 try
                 {
-                    await energyMeter.Start();
-                }
-                catch (PortUnavailableException problem)
-                {
-                    return ReportListenFailure(problem, verbose);
+                    if (await energyMeter.Started(verbose, WhatToDoAbout) is Int32 notStarted)
+                        return notStarted;
                 }
                 catch (Exception e)
                 {
 
-                    Console.Error.WriteLine($"The meter could not start: {e.Message}");
+                    Console.Error.WriteLine($"The {ModbusTLSEnergyMeter.MeterKind.Name} could not start: {e.Message}");
 
                     if (verbose)
                         Console.Error.WriteLine(e);
@@ -779,48 +795,24 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
         #endregion
 
-        #region (private static) ReportListenFailure(Problem, Verbose)
+        #region (private static) WhatToDoAbout(Problem)
 
         /// <summary>
-        /// Say which of the meter's two ports could not be had, and what to do
-        /// about it.
+        /// What somebody can do about a port of the meter's that something
+        /// else is listening on: move it, with the switch that moves that one.
         /// </summary>
         /// <remarks>
         /// Which one matters, because a different switch moves each: --port the
         /// Modbus/TLS frontend, --http-port the web interface. "Port in use" on
-        /// its own sends somebody to move the wrong one half of the time.
+        /// its own sends somebody to move the wrong one half of the time - and
+        /// so does the node's own sentence, asked for where this gives none: it
+        /// names --port, which is the web interface's on every other kind of
+        /// node.
         /// </remarks>
-        private static Int32 ReportListenFailure(PortUnavailableException  Problem,
-                                                 Boolean                   Verbose)
-        {
+        private static String WhatToDoAbout(PortUnavailableException Problem)
 
-            var port    = Problem.Port.ToUInt16();
-            var option  = Problem.Whose == ModbusTLSEnergyMeter.ModbusTLSPort
-                              ? "--port"
-                              : "--http-port";
-
-            Console.Error.WriteLine($"The meter could not start: {Problem.Message}.");
-
-            if (Problem.Because == SocketError.AccessDenied &&
-                port < 1024 &&
-                !OperatingSystem.IsWindows())
-            {
-                Console.Error.WriteLine();
-                Console.Error.WriteLine($"Port {port} is privileged. Either start this as root, or once:");
-                Console.Error.WriteLine($"  sudo setcap cap_net_bind_service=+ep {Environment.ProcessPath}");
-                Console.Error.WriteLine($"or pick a port above 1024 with {option}.");
-            }
-
-            else if (Problem.Because == SocketError.AddressAlreadyInUse)
-                Console.Error.WriteLine("Another meter already running is the usual answer. " +
-                                        $"Stop it, or give this one another port with {option} <number>.");
-
-            if (Verbose)
-                Console.Error.WriteLine(Problem);
-
-            return 1;
-
-        }
+            => "Another meter already running is the usual answer. Stop it, or give this one another port with " +
+              $"{(Problem.Whose == ModbusTLSEnergyMeter.ModbusTLSPort ? "--port" : "--http-port")} <number>.";
 
         #endregion
 
