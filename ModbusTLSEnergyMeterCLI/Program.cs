@@ -869,13 +869,27 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             else
             {
 
-                // One line per band, because a band is the unit that is
-                // asked at once - putting two bands on one line would read
-                // as six equal servers when it is two and then four.
+                // A band begins a line of its own, because a band is the unit
+                // that is asked at once - putting two bands on one line would
+                // read as six equal servers when it is two and then four. What
+                // of a band does not fit in 80 columns goes on below it at the
+                // same column, broken after a server's comma and never in a
+                // name, and its priority stays with its last server - as every
+                // kind of node's banner has it since WWCP_Node 43c1cc4: the
+                // PTB's four, which a meter asks whose file names none, made
+                // one line of 83 columns.
                 for (var i = 0; i < bands.Count; i++)
-                    Console.WriteLine((i == 0 ? "  time servers   " : "                 ") +
-                                      String.Join(", ", bands[i].Select(source => source.Hostname.Trimmed)) +
-                                      (bands.Count > 1 ? $"   (priority {bands[i][0].Priority})" : ""));
+                {
+
+                    var names     = bands[i].Select(source => source.Hostname.Trimmed).ToArray();
+                    var priority  = bands.Count > 1 ? $"   (priority {bands[i][0].Priority})" : "";
+
+                    foreach (var line in NodeUsage.WrapItems(names.Select((name, n) => n < names.Length - 1 ? name + "," : name + priority),
+                                                             i == 0 ? "  time servers   " : "                 ",
+                                                             "                 "))
+                        Console.WriteLine(line);
+
+                }
 
                 Console.WriteLine($"                 at least {Meter.TimeSources.MinServers} of them must answer" +
                                   (Meter.NTSEnabled ? $", checked every {Meter.TimeCheckEvery.TotalMinutes:F0} min" : " - and NTS is switched off"));
