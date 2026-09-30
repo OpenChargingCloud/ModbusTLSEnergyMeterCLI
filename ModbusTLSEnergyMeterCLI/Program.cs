@@ -104,17 +104,24 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
             var below = new String(' ', NodeUsage.Column);
 
-            Say(Synopsis("[--port <number>]", "[--any | --listen <address>]",
-                         "[--pki <directory>]", "[--regenerate-pki]",
-                         "[--name <text>]", "[--hostname <name>]", "[--ip <address>]",
-                         "[--server-pfx <file>]", "[--pfx-password <text>]",
-                         "[--client-ca <file>]", "[--serial <text>]",
-                         "[--meter-mode <net|import|export>]", "[--sim-day <minutes>]",
-                         "[--idle-timeout <seconds>]", "[--write-timeout <seconds>]",
-                         "[--http-port <number>]", "[--https]", "[--config <file>]", "[--data <directory>]",
-                         "[--log-days <number>]",
-                         "[--selftest [<role>]]", "[--verify-log]",
-                         "[--verbose | --quiet]"));
+            // Broken between the switches and never inside one, a line below
+            // the first switch: NodeUsage.Wrap breaks between words, and would
+            // break "[--port <number>]" in two.
+            const String usage = "Usage: ModbusTLSEnergyMeter ";
+
+            Say(NodeUsage.WrapItems([ "[--port <number>]", "[--any | --listen <address>]",
+                                      "[--pki <directory>]", "[--regenerate-pki]",
+                                      "[--name <text>]", "[--hostname <name>]", "[--ip <address>]",
+                                      "[--server-pfx <file>]", "[--pfx-password <text>]",
+                                      "[--client-ca <file>]", "[--serial <text>]",
+                                      "[--meter-mode <net|import|export>]", "[--sim-day <minutes>]",
+                                      "[--idle-timeout <seconds>]", "[--write-timeout <seconds>]",
+                                      "[--http-port <number>]", "[--https]", "[--config <file>]", "[--data <directory>]",
+                                      "[--log-days <number>]",
+                                      "[--selftest [<role>]]", "[--verify-log]",
+                                      "[--verbose | --quiet]" ],
+                                    usage,
+                                    new String(' ', usage.Length)));
             Console.WriteLine();
 
             Console.WriteLine("Network:");
@@ -204,45 +211,6 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                "and 'quit' or Ctrl+C stops the meter. Started where there is no terminal - from a script, under a " +
                                "service manager, in CI, or with the output going into a file - there is no prompt and it simply " +
                                "runs.", "", ""));
-
-        }
-
-        #endregion
-
-        #region (private static) Synopsis(params Items)
-
-        /// <summary>
-        /// The switches in one place, laid out as the node lays out its own:
-        /// one bracketed item after the other behind the program's name, and a
-        /// new line, begun below the first item, where the next item would
-        /// reach past <see cref="NodeUsage.Width"/>.
-        /// </summary>
-        /// <remarks>
-        /// <see cref="NodeUsage.Wrap"/> breaks between words, and so would
-        /// break "[--port &lt;number&gt;]" in two.
-        /// </remarks>
-        /// <param name="Items">The switches, one bracketed item each.</param>
-        private static IEnumerable<String> Synopsis(params String[] Items)
-        {
-
-            const String usage = "Usage: ModbusTLSEnergyMeter";
-
-            var line = usage;
-
-            foreach (var item in Items)
-            {
-
-                if (line.Length > usage.Length && line.Length + 1 + item.Length > NodeUsage.Width)
-                {
-                    yield return line;
-                    line = new String(' ', usage.Length);
-                }
-
-                line += " " + item;
-
-            }
-
-            yield return line;
 
         }
 
@@ -678,27 +646,12 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             await using (energyMeter)
             {
 
-                // A port the meter could not have is the node's to explain,
-                // with WhatToDoAbout for the switch that moves it. Started lets
-                // anything else through, and whatever else would stop the start
-                // is said here, as it was before the node said the rest, rather
-                // than end the process with a stack trace.
-                try
-                {
-                    if (await energyMeter.Started(verbose, WhatToDoAbout) is Int32 notStarted)
-                        return notStarted;
-                }
-                catch (Exception e)
-                {
-
-                    Console.Error.WriteLine($"The {ModbusTLSEnergyMeter.MeterKind.Name} could not start: {e.Message}");
-
-                    if (verbose)
-                        Console.Error.WriteLine(e);
-
-                    return 1;
-
-                }
+                // A start that fails is the node's to explain: a port the meter
+                // could not have, named by the switch that moves it, anything
+                // else in one line - and the password of a first start's
+                // account, which is made before the ports are opened.
+                if (await energyMeter.Started(verbose, SwitchOf: SwitchOf) is Int32 notStarted)
+                    return notStarted;
 
                 PrintBanner(energyMeter, pkiDir, pfxPassword, ownPKI);
 
@@ -795,24 +748,24 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
         #endregion
 
-        #region (private static) WhatToDoAbout(Problem)
+        #region (private static) SwitchOf(Problem)
 
         /// <summary>
-        /// What somebody can do about a port of the meter's that something
-        /// else is listening on: move it, with the switch that moves that one.
+        /// The switch that moves a port of the meter's it could not have: --port
+        /// the Modbus/TLS frontend's, --http-port the web interface's.
         /// </summary>
         /// <remarks>
-        /// Which one matters, because a different switch moves each: --port the
-        /// Modbus/TLS frontend, --http-port the web interface. "Port in use" on
-        /// its own sends somebody to move the wrong one half of the time - and
-        /// so does the node's own sentence, asked for where this gives none: it
-        /// names --port, which is the web interface's on every other kind of
-        /// node.
+        /// Which one matters, because a different switch moves each. "Port in
+        /// use" on its own sends somebody to move the wrong one half of the
+        /// time - and so would the node's own sentences, told nothing: they
+        /// would name --port for the web interface, as on every other kind of
+        /// node, and no switch at all for the Modbus/TLS frontend.
         /// </remarks>
-        private static String WhatToDoAbout(PortUnavailableException Problem)
+        private static String SwitchOf(PortUnavailableException Problem)
 
-            => "Another meter already running is the usual answer. Stop it, or give this one another port with " +
-              $"{(Problem.Whose == ModbusTLSEnergyMeter.ModbusTLSPort ? "--port" : "--http-port")} <number>.";
+            => Problem.Whose == ModbusTLSEnergyMeter.ModbusTLSPort
+                   ? "--port"
+                   : "--http-port";
 
         #endregion
 
@@ -925,15 +878,10 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
             }
 
-            if (Meter.GeneratedPassword is not null)
-            {
-                Console.WriteLine();
-                Console.WriteLine("  +- First start: there were no accounts, so an administrator was made -------");
-                Console.WriteLine($"  |  user      {Meter.GeneratedUserId}");
-                Console.WriteLine($"  |  password  {Meter.GeneratedPassword}");
-                Console.WriteLine("  |  It is shown here once and kept only as a hash. Write it down.");
-                Console.WriteLine("  +---------------------------------------------------------------------------");
-            }
+            // The node's box, which a first start that failed at its port shows
+            // as well: the account was made before the ports were opened.
+            foreach (var line in Meter.FirstStartBox())
+                Console.WriteLine(line);
 
             Console.WriteLine();
 
