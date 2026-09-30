@@ -831,7 +831,29 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
             #endregion
 
-            Console.WriteLine($"  name servers   {(Meter.DNSEnabled ? String.Join(", ", Meter.DNSClient.DNSServers) : "switched off")}");
+            #region The name servers
+
+            // One line for each, the first beside the label and the others
+            // below it at the same column, as the time servers have one for
+            // each band; and each said as every kind of node says it in its
+            // banner: an IPv6 address in the short form, a name without the
+            // root's dot, and a server's own timeout as exactly as the file
+            // gives it. Hermod's ToString(), which the log goes on using, put
+            // them all on one line with every group of an IPv6 address spelled
+            // out - 247 characters for the five name servers of a Windows
+            // machine - and a timeout after a comma among them read as one
+            // more server.
+            var nameServers = Meter.DNSEnabled
+                                  ? Meter.DNSClient.DNSServers.Select(NodeBanner.NameServer).ToArray()
+                                  : [ "switched off" ];
+
+            Console.WriteLine($"  name servers   {nameServers.FirstOrDefault()}");
+
+            foreach (var nameServer in nameServers.Skip(1))
+                Console.WriteLine($"                 {nameServer}");
+
+            #endregion
+
             #region The time servers
 
             var bands = Meter.TimeSources.Bands();
