@@ -807,7 +807,12 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine($"  sign in        POST {Meter.WebInterfaceURL}{ModbusTLSEnergyMeter.ExtAPIPath.ToString().Trim('/')}/auth/login");
             Console.WriteLine($"  JSON API       {Meter.APIURL}v1/status");
             Console.WriteLine($"  event stream   {Meter.APIURL}v1/events");
-            Console.WriteLine($"  accounts       {Meter.ExtAPI.Users.Count()} in {Meter.AccountsPath}");
+            // The directory as the other files are said: whole, with the
+            // system's separators and none at its end - AccountsPath carries
+            // the one the node adds for the accounts' API, and said as it was
+            // given, it read "...\data\" among paths that end in their names
+            // (as every kind of node's banner has it since WWCP_Node 74f12e8).
+            Console.WriteLine($"  accounts       {Meter.ExtAPI.Users.Count()} in {Path.TrimEndingDirectorySeparator(Path.GetFullPath(Meter.AccountsPath))}");
             Console.WriteLine($"  log files      {(Meter.LogPath is not null ? $"{Meter.LogPath}, kept {Meter.LogKeepDays} days" : "none - the log is in memory only (--log-days 0)")}");
             Console.WriteLine($"  log book       {(Meter.MetrologicalLog is not null ? $"{Meter.MetrologicalLog.Path}, kept whole, signed by {Meter.MetrologicalLog.Signer.KeyId}" : "none")}");
             Console.WriteLine($"  configuration  {Meter.ConfigFile.Path}");
@@ -874,20 +879,34 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                 // read as six equal servers when it is two and then four. What
                 // of a band does not fit in 80 columns goes on below it at the
                 // same column, broken after a server's comma and never in a
-                // name, and its priority stays with its last server - as every
-                // kind of node's banner has it since WWCP_Node 43c1cc4: the
-                // PTB's four, which a meter asks whose file names none, made
-                // one line of 83 columns.
+                // name, as every kind of node's banner has it since WWCP_Node
+                // 43c1cc4: the PTB's four, which a meter asks whose file names
+                // none, made one line of 83 columns. Its priority stays with
+                // its last server where the two fit on a line, and has a line
+                // of its own below it where they would not - a last name of 49
+                // characters and its priority made 83 columns still, as in the
+                // node's banner until WWCP_Node 74f12e8 (found by the EMSP).
                 for (var i = 0; i < bands.Count; i++)
                 {
 
-                    var names     = bands[i].Select(source => source.Hostname.Trimmed).ToArray();
+                    const String column = "                 ";
+
+                    var items     = bands[i].Select(source => source.Hostname.Trimmed).ToArray();
                     var priority  = bands.Count > 1 ? $"   (priority {bands[i][0].Priority})" : "";
 
-                    foreach (var line in NodeUsage.WrapItems(names.Select((name, n) => n < names.Length - 1 ? name + "," : name + priority),
-                                                             i == 0 ? "  time servers   " : "                 ",
-                                                             "                 "))
+                    for (var n = 0; n < items.Length - 1; n++)
+                        items[n] += ",";
+
+                    var ownLine   = priority.Length > 0 && (items[^1] + priority).Length > NodeUsage.Width - column.Length;
+
+                    if (!ownLine)
+                        items[^1] += priority;
+
+                    foreach (var line in NodeUsage.WrapItems(items, i == 0 ? "  time servers   " : column, column))
                         Console.WriteLine(line);
+
+                    if (ownLine)
+                        Console.WriteLine(column + priority.TrimStart());
 
                 }
 
