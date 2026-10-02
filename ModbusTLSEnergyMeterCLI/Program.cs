@@ -27,6 +27,7 @@ using cloud.charging.open.protocols.WWCP.Node;
 using cloud.charging.open.protocols.WWCP.Node.Logging;
 using cloud.charging.open.protocols.WWCP.Node.CommandLine;
 using cloud.charging.open.protocols.WWCP.Node.Configuration;
+using cloud.charging.open.protocols.WWCP.Node.SecureShell;
 
 using cloud.charging.open.EnergyMeters.ModbusTLS;
 using cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine;
@@ -116,7 +117,9 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                       "[--client-ca <file>]", "[--serial <text>]",
                                       "[--meter-mode <net|import|export>]", "[--sim-day <minutes>]",
                                       "[--idle-timeout <seconds>]", "[--write-timeout <seconds>]",
-                                      "[--http-port <number>]", "[--https]", "[--config <file>]", "[--data <directory>]",
+                                      "[--http-port <number>]", "[--https]",
+                                      "[--ssh-port <number>]", "[--no-ssh]", "[--authorize-ssh-key <account>=<file>]",
+                                      "[--config <file>]", "[--data <directory>]",
                                       "[--log-days <number>]",
                                       "[--selftest [<role>]]", "[--verify-log]",
                                       "[--verbose | --quiet]" ],
@@ -149,6 +152,19 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                              "log book beside them - the entries that are evidence: the clock, the certificates, every write " +
                                              "and every refusal - is signed, chained and kept whole. 0 writes neither, and keeps the log in " +
                                              "memory only.");
+            Console.WriteLine();
+
+            Console.WriteLine("SSH:");
+            Switch("--ssh-port <number>",   $"where the command line is served over SSH (default: " +
+                                            $"{SSHSettings.DefaultPortFor(ModbusTLSEnergyMeter.DefaultHTTPPort)}, " +
+                                            $"{SSHSettings.DefaultPortOffset} above the web interface's port), on the addresses " +
+                                             "the web interface listens on");
+            Switch("--no-ssh",               "do not serve the command line over SSH");
+            Switch("--authorize-ssh-key <account>=<file>",
+                                             "let the account in over SSH with the public key in the file - an OpenSSH .pub, or what " +
+                                             "PuTTYgen saves - kept in ssh/<account> below the data directory, one file per account in the " +
+                                             "format of OpenSSH's authorized_keys. May be given several times. Whoever signs in is that " +
+                                             "account, and may do what its roles let it do on the web interface.");
             Console.WriteLine();
 
             Console.WriteLine("Certificates:");
@@ -242,6 +258,9 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             var      writeTimeout   = TimeSpan.FromSeconds(30);
             IPPort?  httpPort       = null;
             var      https          = false;
+            IPPort?  sshPort        = null;
+            var      noSSH          = false;
+            var      sshKeys        = new List<(String Account, String File)>();
             String?  configFilePath = null;
             String?  dataPath       = null;
             Int32?   logKeepDays    = null;
@@ -317,6 +336,54 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                         {
                             Console.Error.WriteLine("Missing or invalid port number after --http-port!");
                             return 2;
+                        }
+                        break;
+
+                    case "--ssh-port":
+                        if (i + 1 < Arguments.Length && UInt16.TryParse(Arguments[i + 1], out var parsedSSHPort) && parsedSSHPort > 0)
+                        {
+                            sshPort = IPPort.Parse(parsedSSHPort);
+                            i++;
+                        }
+                        else
+                        {
+                            Console.Error.WriteLine("Missing or invalid port number after --ssh-port!");
+                            return 2;
+                        }
+                        break;
+
+                    case "--no-ssh":
+                        noSSH = true;
+                        break;
+
+                    // Whether the file holds a key is asked now, before the meter
+                    // is made; whether the account is the meter's once its
+                    // accounts are read, which the meter does at its start.
+                    case "--authorize-ssh-key":
+                        {
+
+                            if (!NodeArguments.TryTakeValue(Arguments, ref i, out var authorize))
+                            {
+                                Console.Error.WriteLine("Missing <account>=<file> after --authorize-ssh-key!");
+                                return 2;
+                            }
+
+                            var at = authorize.IndexOf('=');
+
+                            if (at <= 0 || at == authorize.Length - 1 || !AuthorizedKeysStore.IsAccountName(authorize[..at]))
+                            {
+                                NodeProgram.Say(Console.Error, $"--authorize-ssh-key wants <account>=<file>, and '{authorize}' is not that.");
+                                return 2;
+                            }
+
+                            if (!AuthorizedKeysStore.TryReadFile(authorize[(at + 1)..], out _, out var refused))
+                            {
+                                NodeProgram.Say(Console.Error, $"--authorize-ssh-key: {refused}");
+                                return 2;
+                            }
+
+                            sshKeys.Add((authorize[..at], authorize[(at + 1)..]));
+
                         }
                         break;
 
@@ -479,6 +546,12 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                 }
             }
 
+            if (noSSH && sshPort is not null)
+            {
+                Console.Error.WriteLine("--no-ssh and --ssh-port ask for opposite things!");
+                return 2;
+            }
+
             if (verbose && quiet)
             {
                 Console.Error.WriteLine("--verbose and --quiet ask for opposite things!");
@@ -635,7 +708,14 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
                                   ConsoleLogLevel:    verbose ? LogLevel.Debug
                                                           : quiet ? LogLevel.Warning
-                                                                  : LogLevel.Info
+                                                                  : LogLevel.Info,
+
+                                  // On unless a switch or the file says otherwise,
+                                  // as on every kind of node.
+                                  SSH:                new SSHSettings(Enabled:      noSSH ? false : sshPort is not null ? true : null,
+                                                                      Port:         sshPort,
+                                                                      OnByDefault:  true,
+                                                                      Authorize:    sshKeys)
                               );
             }
             catch (Exception e)
@@ -645,6 +725,10 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
 
             await using (energyMeter)
             {
+
+                // What somebody signed in over SSH gets: this program's own command
+                // line, with its commands beside the node's.
+                energyMeter.CommandLines = (terminal, caller) => new MeterCLI(energyMeter, terminal, caller);
 
                 // A start that fails is the node's to explain: a port the meter
                 // could not have, named by the switch that moves it, anything
@@ -763,9 +847,9 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
         /// </remarks>
         private static String SwitchOf(PortUnavailableException Problem)
 
-            => Problem.Whose == ModbusTLSEnergyMeter.ModbusTLSPort
-                   ? "--port"
-                   : "--http-port";
+            => Problem.Whose == ModbusTLSEnergyMeter.ModbusTLSPort ? "--port"
+             : Problem.Whose == NodePort.SSH                       ? "--ssh-port"
+             :                                                       "--http-port";
 
         #endregion
 
