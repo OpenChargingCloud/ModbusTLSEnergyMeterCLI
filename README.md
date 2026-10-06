@@ -179,16 +179,35 @@ machine, no files, no tunnels. `--ssh-port` moves it, `--no-ssh` switches it
 off.
 
 Whoever signs in is an account of the energy meter, under its name, with a key
-of its own. The first start makes `root`; give it your public key once:
+of its own. The first start makes `root`, and the way recommended is to bring
+root your own public key with that very start:
 
 ```
 dotnet run --project ModbusTLSEnergyMeterCLI -- --authorize-ssh-key root=C:\Users\you\.ssh\id_ed25519.pub
 ```
 
+Without it, the first start makes up a key pair for `root`, lets its public key
+in and prints the private key once, below the password - see
+[The first administrator](#the-first-administrator). Save the lines from
+`BEGIN` to `END` as a file only you can read, and replace that key with your own
+later: it was on a console, and on whatever recorded the console. The switch
+works at any later start as well.
+
 An OpenSSH `.pub` goes in as it is, and so does what PuTTYgen saves with *Save
-public key*. The key is kept in `data/ssh/root`, a file in the format of
-`authorized_keys`, and putting a line into it by hand does the same; taking one
-out locks that key out at once. Then:
+public key*. The key is kept with the account, beside its password, and the
+`sshKeys` command lists, adds and removes the keys of an account:
+
+```
+sshKeys root
+sshKeys root add ssh-ed25519 AAAAC3Nza... you@laptop
+sshKeys root remove SHA256:Mb2s
+```
+
+A key is removed by its fingerprint or the beginning of it, and a key removed is
+locked out at once. Options in front of a key, `from=` and `expiry-time=` among
+them, hold as in OpenSSH's `authorized_keys`. At the console every account's
+keys can be managed; over SSH an account manages its own. `apiKeys` does the
+same for the account's API keys, and shows a new one once only. Then:
 
 ```
 ssh -p 22351 root@127.0.0.1
@@ -330,7 +349,9 @@ somewhere else instead, and then nothing is generated at all.
 ## The first administrator
 
 At the first start there are no accounts, so one is made and its password
-printed once:
+printed once - and, with SSH on and no `--authorize-ssh-key root=...`, the
+private key of an SSH key pair made up for it, below the box (see
+[Typing at it over SSH](#typing-at-it-over-ssh)):
 
 ```
   +- First start: there were no accounts, so an administrator was made -------

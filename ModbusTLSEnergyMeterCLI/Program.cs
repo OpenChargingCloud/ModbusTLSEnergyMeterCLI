@@ -162,9 +162,13 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Switch("--no-ssh",               "do not serve the command line over SSH");
             Switch("--authorize-ssh-key <account>=<file>",
                                              "let the account in over SSH with the public key in the file - an OpenSSH .pub, or what " +
-                                             "PuTTYgen saves - kept in ssh/<account> below the data directory, one file per account in the " +
-                                             "format of OpenSSH's authorized_keys. May be given several times. Whoever signs in is that " +
-                                             "account, and may do what its roles let it do on the web interface.");
+                                             "PuTTYgen saves - kept with the account, where the sshKeys command lists, adds and removes " +
+                                             "the keys of an account. Options in front of a key, from= and expiry-time= among them, hold " +
+                                             "as in OpenSSH's authorized_keys. May be given several times. Whoever signs in is that " +
+                                             "account, and may do what its roles let it do on the web interface. Recommended at a first " +
+                                            $"start: --authorize-ssh-key {WWCPNode.DefaultAdminUser}=<your key.pub>. Without it, a first " +
+                                            $"start makes up a key pair for '{WWCPNode.DefaultAdminUser}' and shows it once, on the " +
+                                             "console, beside the password.");
             Console.WriteLine();
 
             Console.WriteLine("Certificates:");
