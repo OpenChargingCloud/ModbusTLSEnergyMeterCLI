@@ -218,6 +218,14 @@ username* `root`, and the private key under *Connection → SSH → Auth →
 Credentials*. The first time, PuTTY asks whether to trust the energy meter's
 host key: the banner prints its fingerprint under `SSH`, to compare it with.
 
+On the web interface, *Configuration -> SSH server* shows whether it runs and
+where, its host key with the fingerprint and the `known_hosts` line, who is
+connected and every account's keys, and switches it on or off, moves it or
+opens it to passwords at once. It is the administrators' page: what it lists is
+the accounts by another name, which a viewer or an auditor is not shown. A
+`--no-ssh` or `--ssh-port` given at the start wins over what is saved there,
+and the page says so.
+
 Everything works as at the console — Tab, the history, the log above the line
 being typed — with three differences. `quit`, `exit` and Ctrl+D leave the
 session, and the energy meter keeps running. The account may do what its roles
