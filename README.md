@@ -271,7 +271,8 @@ over the moment it is valid.
 ### Where it keeps things
 
 `--data` for the accounts, the log and the certificate store, `--config` for
-the name servers and the time servers, `--pki` for the certificates this meter is
+the name servers, the time servers and the meter this one stands in front of, if
+any (`upstream`), `--pki` for the certificates this meter is
 bootstrapped with. All three default to a directory beside the repository root,
 and all three are ignored by git: the generated PKI holds private keys for a
 simulator, but private keys all the same.

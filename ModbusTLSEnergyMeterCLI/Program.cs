@@ -143,7 +143,8 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                              "are never the same file. At the first start the meter signs one for itself, so that the page " +
                                              "can be reached at all; a browser will say it does not know who signed it, and it is right. Ask " +
                                              "for a proper one on the Web certificate page.");
-            Switch("--config <file>",       $"where the name servers and the time servers live (default: {WWCPConfigFile.DefaultFileName} " +
+            Switch("--config <file>",       $"where the name servers, the time servers and the meter in front of which this one stands live " +
+                                            $"(default: {WWCPConfigFile.DefaultFileName} " +
                                              "below the repository root)");
             Switch("--data <directory>",     "where the accounts and the log live (default: data/ below the repository root). At the first " +
                                             $"start an administrator, '{ModbusTLSEnergyMeter.DefaultAdminUser}', is made there and its password " +
