@@ -133,9 +133,16 @@ jobs:
       # No category filter. Nothing here waits for the network: the tests that
       # ask a time server name one under .example, expect it to fail, and give
       # it a second.
+      #
+      # --blame-hang: a test that has not finished after 15 minutes is a hang, not
+      # a slow test - none takes more than seconds. Its test host is dumped
+      # (mini: thread stacks, a few MB) and stopped, and the run names the test
+      # instead of waiting for the step's own timeout without a word. On
+      # 2026-10-26 Hermod's suite hung on the Debian leg and said nothing for
+      # two hours; which test it was could only be guessed from the order.
       - name: Test the meter
         timeout-minutes: 30
-        run: dotnet test libs/ModbusTLSEnergyMeter/ModbusTLSEnergyMeterTests/ModbusTLSEnergyMeterTests.csproj --configuration Release --no-build --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
+        run: dotnet test libs/ModbusTLSEnergyMeter/ModbusTLSEnergyMeterTests/ModbusTLSEnergyMeterTests.csproj --configuration Release --no-build --blame-hang --blame-hang-timeout 15m --blame-hang-dump-type mini --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}.trx" --results-directory artifacts
 
       # The question no unit test in this repository asks: does it start, and
       # does it answer the way its clients will ask? Everything that only
@@ -316,4 +323,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.leg }}
-          path: artifacts/*.trx
+          path: |
+            artifacts/*.trx
+            artifacts/*/Sequence_*.xml
+            artifacts/*/*_hangdump.dmp
