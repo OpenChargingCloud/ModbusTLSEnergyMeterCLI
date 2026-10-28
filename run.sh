@@ -17,4 +17,5 @@ set -e
 
 cd "$(dirname "$0")"
 
-dotnet run --project ModbusTLSEnergyMeterCLI/ModbusTLSEnergyMeterCLI.csproj -c Release -- "$@"
+#dotnet run --no-build --no-restore --project ModbusTLSEnergyMeterCLI -c Release -- "$@"
+dotnet run --no-build --no-restore --project ModbusTLSEnergyMeterCLI -- "$@"
