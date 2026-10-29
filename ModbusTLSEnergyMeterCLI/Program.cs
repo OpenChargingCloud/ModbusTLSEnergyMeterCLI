@@ -30,6 +30,7 @@ using cloud.charging.open.protocols.WWCP.Node.Configuration;
 using cloud.charging.open.protocols.WWCP.Node.SecureShell;
 
 using cloud.charging.open.EnergyMeters.ModbusTLS;
+using cloud.charging.open.EnergyMeters.ModbusTLS.Certificates;
 using cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine;
 
 using IIPAddress  = org.GraphDefined.Vanaheimr.Hermod.IIPAddress;
@@ -648,6 +649,12 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             else if (extraDNSNames.Count > 0 || extraIPs.Count > 0)
                 Console.WriteLine("Note: --hostname and --ip only reach a certificate while it is being built, " +
                                   "and these already exist. Add --regenerate-pki to build them again.");
+
+            // The PKI holds the keys of its CAs: whoever reads them issues
+            // themselves a client of any role. At every start, so that one an
+            // older version left open to everybody is taken in as well.
+            if (ownPKI)
+                BootstrapPKI.KeepToItsOwner(pkiDir, problem => Console.Error.WriteLine($"Note: {problem}"));
 
             foreach (var (what, path) in new[] { ("meter certificate", serverPfx),
                                                  ("client CA",         clientsCA) })

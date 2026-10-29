@@ -275,7 +275,11 @@ the name servers, the time servers and the meter this one stands in front of, if
 any (`upstream`), `--pki` for the certificates this meter is
 bootstrapped with. All three default to a directory beside the repository root,
 and all three are ignored by git: the generated PKI holds private keys for a
-simulator, but private keys all the same.
+simulator, but private keys all the same. So it is kept like the data: at every
+start the PKI's directory is made its owner's alone with everything in it - on
+Unix the directory 0700 and its files 0600, on Windows an access control list
+for the account the meter runs under, SYSTEM and the administrators, which
+everything in it inherits - a PKI an older version left open included.
 
 The certificate this meter was started with is put into the certificate store at
 the first start, as what the Modbus/TLS listener shows, and the CA it was started
