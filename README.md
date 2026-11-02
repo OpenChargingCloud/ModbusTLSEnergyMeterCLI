@@ -41,7 +41,7 @@ dotnet build ModbusTLSEnergyMeter/ModbusTLSEnergyMeter.slnx
 ./run.sh --any --port 5802
 ```
 
-Building needs the .NET 10 SDK and **Node 22 or newer**: the web interface is
+Building needs the .NET 10 SDK and **Node 22.15 or newer**: the web interface is
 bundled by webpack as part of the build. `-p:SkipFrontendBuild=true` leaves it
 out and keeps the rest.
 
