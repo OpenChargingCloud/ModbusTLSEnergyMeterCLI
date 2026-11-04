@@ -175,7 +175,7 @@ the meter runs until it is stopped, exactly as it did before.
 The same prompt is served over SSH, on port 22351 — twenty thousand above the
 web interface's — and on the addresses the web interface listens on: the
 loopback, or every address with `--any`. Nothing else is: no shell of the
-machine, no tunnels, and files only where the configuration file says so - see
+machine, no tunnels, and of files only the log files - see
 [Its log files over SFTP](#its-log-files-over-sftp). `--ssh-port` moves it,
 `--no-ssh` switches it off.
 
@@ -239,15 +239,16 @@ and `ssh`. And the session's log starts at the console's level and is its own:
 ### Its log files over SFTP
 
 The same SSH server serves the log files over SFTP - `sftp`, `scp`, WinSCP or
-FileZilla, with an account's key as above - once the configuration file says
-so, or the checkbox on *Configuration -> SSH server* does:
+FileZilla, with an account's key as above. Unlike most programs of a node, the
+energy meter does so unless the configuration file, or the checkbox on
+*Configuration -> SSH server*, says otherwise:
 
 ```json
-"ssh": { "sftp": true }
+"ssh": { "sftp": false }
 ```
 
-It is off until then, and switched off again it ends the SFTP sessions that
-are open. Two folders are shown, to an account that may read the log
+Switched off, it ends the SFTP sessions that are open; with `--no-ssh` there
+is no SFTP either. Two folders are shown, to an account that may read the log
 (`log:read`), and nothing else of the machine:
 
 | Folder | Shows |

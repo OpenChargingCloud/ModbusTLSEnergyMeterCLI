@@ -160,8 +160,9 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Switch("--ssh-port <number>",   $"where the command line is served over SSH (default: " +
                                             $"{SSHSettings.DefaultPortFor(ModbusTLSEnergyMeter.DefaultHTTPPort)}, " +
                                             $"{SSHSettings.DefaultPortOffset} above the web interface's port), on the addresses " +
-                                             "the web interface listens on");
-            Switch("--no-ssh",               "do not serve the command line over SSH");
+                                             "the web interface listens on - and the log files over SFTP, unless the configuration " +
+                                             "file says \"sftp\": false");
+            Switch("--no-ssh",               "do not serve the command line over SSH, nor the log files over SFTP");
             Switch("--authorize-ssh-key <account>=<file>",
                                              "let the account in over SSH with the public key in the file - an OpenSSH .pub, or what " +
                                              "PuTTYgen saves - kept with the account, where the sshKeys command lists, adds and removes " +
@@ -723,11 +724,14 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                                                   : LogLevel.Info,
 
                                   // On unless a switch or the file says otherwise,
-                                  // as on every kind of node.
-                                  SSH:                new SSHSettings(Enabled:      noSSH ? false : sshPort is not null ? true : null,
-                                                                      Port:         sshPort,
-                                                                      OnByDefault:  true,
-                                                                      Authorize:    sshKeys)
+                                  // as on every kind of node - and, unlike most,
+                                  // its log files over SFTP with it, unless the
+                                  // file says "sftp": false.
+                                  SSH:                new SSHSettings(Enabled:        noSSH ? false : sshPort is not null ? true : null,
+                                                                      Port:           sshPort,
+                                                                      OnByDefault:    true,
+                                                                      Authorize:      sshKeys,
+                                                                      SftpByDefault:  true)
                               );
             }
             catch (Exception e)
