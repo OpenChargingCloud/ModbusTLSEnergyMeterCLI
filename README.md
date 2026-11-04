@@ -175,8 +175,9 @@ the meter runs until it is stopped, exactly as it did before.
 The same prompt is served over SSH, on port 22351 — twenty thousand above the
 web interface's — and on the addresses the web interface listens on: the
 loopback, or every address with `--any`. Nothing else is: no shell of the
-machine, no files, no tunnels. `--ssh-port` moves it, `--no-ssh` switches it
-off.
+machine, no tunnels, and files only where the configuration file says so - see
+[Its log files over SFTP](#its-log-files-over-sftp). `--ssh-port` moves it,
+`--no-ssh` switches it off.
 
 Whoever signs in is an account of the energy meter, under its name, with a key
 of its own. The first start makes `root`, and the way recommended is to bring
@@ -234,6 +235,29 @@ line over SSH asked this energy meter to synchronise its time.", tagged `cli`
 and `ssh`. And the session's log starts at the console's level and is its own:
 `log debug` shows everything here, `log off` nothing, for this session alone.
 `who` says who else is signed in.
+
+### Its log files over SFTP
+
+The same SSH server serves the log files over SFTP - `sftp`, `scp`, WinSCP or
+FileZilla, with an account's key as above - once the configuration file says
+so, or the checkbox on *Configuration -> SSH server* does:
+
+```json
+"ssh": { "sftp": true }
+```
+
+It is off until then, and switched off again it ends the SFTP sessions that
+are open. Two folders are shown, to an account that may read the log
+(`log:read`), and nothing else of the machine:
+
+| Folder | Shows |
+|---|---|
+| `/logs` | the log files, `<prefix>-yyyy-MM-dd.log` |
+| `/logs/metrological` | the log book's day files and `signing-key.pub.pem`, to check its chain elsewhere - never `signing-key.pem` beside them |
+
+Both are read only, for administrators too: the logs are evidence. With
+`--log-days 0` there are no files to show. Who downloaded what, and from
+where, is in the log.
 
 
 ## What the command line decides
