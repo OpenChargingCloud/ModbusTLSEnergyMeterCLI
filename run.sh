@@ -10,7 +10,7 @@
 #
 # The registered mbaps port 802 is privileged on Linux: either run this as
 # root, or allow the binary to bind low ports once with
-#   sudo setcap cap_net_bind_service=+ep ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI
+#   sudo setcap cap_net_bind_service=+ep ModbusTLSEnergyMeterCLI/bin/Release/net11.0/ModbusTLSEnergyMeterCLI
 # or pick a port above 1024.
 
 set -e

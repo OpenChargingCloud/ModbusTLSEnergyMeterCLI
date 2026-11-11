@@ -20,8 +20,8 @@ need for their own use cases.
 This repository is the **command line**: reading arguments, building a PKI when
 there is none, printing what somebody who just started it needs to know, a
 prompt for whoever is at its console, and stopping on `quit`, Ctrl+C or SIGTERM.
-The meter itself - the registers, the simulation, the web interface, the log and
-the two APIs - is a library of its own in
+The meter itself - the registers, the simulation, the web interface, the log,
+the two APIs and the commands that prompt answers to - is a library of its own in
 [`libs/ModbusTLSEnergyMeter`](libs/ModbusTLSEnergyMeter/README.md), so that a
 test, a service or another program can host one without starting a process.
 **What the meter is and does is described there.**
@@ -41,7 +41,7 @@ dotnet build ModbusTLSEnergyMeter/ModbusTLSEnergyMeter.slnx
 ./run.sh --any --port 5802
 ```
 
-Building needs the .NET 10 SDK and **Node 22.15 or newer**: the web interface is
+Building needs the .NET 11 SDK and **Node 22.15 or newer**: the web interface is
 bundled by webpack as part of the build. `-p:SkipFrontendBuild=true` leaves it
 out and keeps the rest.
 
@@ -360,7 +360,7 @@ found and prints the head of the chain. What that is worth, and what it is not, 
 Linux binding it takes either root or a capability granted once:
 
 ```bash
-sudo setcap cap_net_bind_service=+ep ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI
+sudo setcap cap_net_bind_service=+ep ModbusTLSEnergyMeterCLI/bin/Release/net11.0/ModbusTLSEnergyMeterCLI
 ```
 
 `--port` picks another one when neither is wanted.

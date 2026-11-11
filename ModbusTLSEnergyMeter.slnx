@@ -8,7 +8,9 @@
   </Folder>
   <Folder Name="/Dependencies/Chargy/">
     <Project Path="libs/ChargyCore.NET/ChargyCore/ChargyCore.csproj" />
+    <Project Path="libs/ChargyCore.NET/ChargyCore.QRCodes/ChargyCore.QRCodes.csproj" />
     <Project Path="libs/ChargyCore.NET/ChargyCoreTests/ChargyCoreTests.csproj" />
+    <Project Path="libs/ChargyCore.NET/ChargyVerify/ChargyVerify.csproj" />
   </Folder>
   <Folder Name="/Dependencies/Vanaheimr/">
     <Project Path="libs/Hermod/Hermod/Hermod.csproj" />

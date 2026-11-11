@@ -64,7 +64,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
 
       - uses: actions/setup-node@v7
         with:
@@ -111,7 +111,7 @@ jobs:
         run: |
           set -u
           tmp="$(mktemp -d)"
-          dotnet ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI.dll \
+          dotnet ModbusTLSEnergyMeterCLI/bin/Release/net11.0/ModbusTLSEnergyMeterCLI.dll \
               --port       18802 \
               --http-port  18351 \
               --ssh-port   22802 \
@@ -139,7 +139,7 @@ jobs:
           clock="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18351/api/v1/clock 2>/dev/null || true)"
           clock="${clock:-000}"
 
-          if dotnet ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI.dll \
+          if dotnet ModbusTLSEnergyMeterCLI/bin/Release/net11.0/ModbusTLSEnergyMeterCLI.dll \
                  --selftest --port 18802 --pki "$tmp/pki" \
                  > "$tmp/selftest.log" 2>&1; then
               selftest=0
@@ -147,7 +147,7 @@ jobs:
               selftest=$?
           fi
 
-          if dotnet ModbusTLSEnergyMeterCLI/bin/Release/net10.0/ModbusTLSEnergyMeterCLI.dll \
+          if dotnet ModbusTLSEnergyMeterCLI/bin/Release/net11.0/ModbusTLSEnergyMeterCLI.dll \
                  --selftest NO-ROLE --port 18802 --pki "$tmp/pki" \
                  > "$tmp/selftest-no-role.log" 2>&1; then
               refused=0
@@ -286,7 +286,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
 
       - uses: actions/setup-node@v7
         with:

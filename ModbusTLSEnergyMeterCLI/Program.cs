@@ -742,10 +742,6 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             await using (energyMeter)
             {
 
-                // What somebody signed in over SSH gets: this program's own command
-                // line, with its commands beside the node's.
-                energyMeter.CommandLines = (terminal, caller) => new MeterCLI(energyMeter, terminal, caller);
-
                 // A start that fails is the node's to explain: a port the meter
                 // could not have, named by the switch that moves it, anything
                 // else in one line - and the password of a first start's
