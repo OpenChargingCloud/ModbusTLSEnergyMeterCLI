@@ -160,6 +160,29 @@ ptbtime2.ptb.de answered, 1461 ms altogether:
   +1460 ms  The clock was not stepped: that is a different thing, with every signed reading hanging off it, and not something a test does by surprise.
 ```
 
+Four commands are the meter's own. `showMeterValues` says what it is measuring,
+`showConnections` who is connected over Modbus/TLS - with the SunSpec role in
+the certificate each client showed - and `readRegisters` and `writeRegisters`
+read and write holding registers as a Modbus client would:
+
+```
+EnergyMeter01> readRegisters 40000 2
+40000  0x5375  21365          "Su"
+40001  0x6E53  28243          "nS"
+EnergyMeter01> writeRegisters 40094 1
+Register 40094 written: 0x0001.
+EnergyMeter01> writeRegisters 40052 0x4142
+Register 40052 was answered with IllegalDataAddress: nothing was written.
+EnergyMeter01> showConnections
+Nobody is connected to this meter over Modbus/TLS.
+```
+
+Writing register 40094 is the meter mode changed, as from the web page or by
+a Modbus client, and every write - the refused one as well - is in the log
+book with who typed it. The library's README says what each command needs of
+an account that types it over SSH, under
+[The command line](libs/ModbusTLSEnergyMeter/README.md#the-command-line).
+
 The log keeps writing while you type, from whichever thread did the thing it is
 reporting, and your half-typed line survives it: the line is taken off the
 screen, the entry is written whole, and the line comes back with the cursor
