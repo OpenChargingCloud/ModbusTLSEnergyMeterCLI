@@ -179,7 +179,10 @@ Nobody is connected to this meter over Modbus/TLS.
 
 Writing register 40094 is the meter mode changed, as from the web page or by
 a Modbus client, and every write - the refused one as well - is in the log
-book with who typed it. The library's README says what each command needs of
+book with who typed it. A register of the simulation can be named as SunSpec
+names it - `readRegisters TotWhImp`, `writeRegisters MeterMode 1` - and
+**Tab** completes the name. Who is connected is also the **Connections** page
+of the web interface. The library's README says what each command needs of
 an account that types it over SSH, under
 [The command line](libs/ModbusTLSEnergyMeter/README.md#the-command-line).
 
