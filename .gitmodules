@@ -19,3 +19,6 @@
 [submodule "libs/Urdr"]
 	path = libs/Urdr
 	url = https://github.com/Vanaheimr/Urdr.git
+[submodule "libs/WWCP_Core"]
+	path = libs/WWCP_Core
+	url = https://github.com/OpenChargingCloud/WWCP_Core.git
