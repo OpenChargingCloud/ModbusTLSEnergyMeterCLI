@@ -889,7 +889,7 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
             Console.WriteLine($"  registers      {firstRegister} - {lastRegister}  (SunSpec Common Model 1 + Meter Model 213)");
             Console.WriteLine($"  meter cert     {Meter.MeterCertificate.Subject}");
             Console.WriteLine($"                 valid until {Meter.MeterCertificate.NotAfter:yyyy-MM-dd}" +
-                              (Meter.ModbusCertificates.Next is { } nextModbus
+                              (MeterListeners.NextFor(Meter.Certificates, MeterListeners.Modbus, Meter.TimeProvider.GetUtcNow()) is { } nextModbus
                                    ? $", then the newer one from {nextModbus.NotBefore.UtcDateTime:yyyy-MM-dd HH:mm}"
                                    : "") +
                               $" ({Meter.ModbusCertificates.Candidates.Count} valid for Modbus/TLS in the store)");
