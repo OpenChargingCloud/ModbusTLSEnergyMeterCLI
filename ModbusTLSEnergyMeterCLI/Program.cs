@@ -33,9 +33,8 @@ using cloud.charging.open.EnergyMeters.ModbusTLS;
 using cloud.charging.open.EnergyMeters.ModbusTLS.Certificates;
 using cloud.charging.open.EnergyMeters.ModbusTLS.CommandLine;
 
-using IIPAddress  = org.GraphDefined.Vanaheimr.Hermod.IIPAddress;
+using HermodIP    = org.GraphDefined.Vanaheimr.Hermod.IPAddress;
 using IPv4Address = org.GraphDefined.Vanaheimr.Hermod.IPv4Address;
-using IPvXAddress = org.GraphDefined.Vanaheimr.Hermod.IPvXAddress;
 using IPPort      = org.GraphDefined.Vanaheimr.Hermod.IPPort;
 
 #endregion
@@ -702,15 +701,15 @@ namespace cloud.charging.open.EnergyMeters.ModbusTLS.CLI
                                   ServerPfxPassword:  pfxPassword,
                                   ClientCACertPath:   clientsCA,
                                   ListenAddress:      address,
-                                  ListenPort:         port,
+                                  ListenPort:         IPPort.Parse(port),
                                   IdleTimeout:        idleTimeout,
                                   WriteTimeout:       writeTimeout,
                                   MeterMode:          meterMode,
                                   SimulatedDayLength: simulatedDay,
 
                                   HTTPHostname:       anyAddress
-                                                          ? IPvXAddress.Any
-                                                          : (IIPAddress) IPv4Address.Localhost,
+                                                          ? HermodIP.Any
+                                                          : new HermodIP(IPv4Address.Localhost),
                                   HTTPPort:           httpPort,
                                   HTTPS:              https,
                                   DataPath:           dataPath       ?? Path.Combine(root, "data"),
